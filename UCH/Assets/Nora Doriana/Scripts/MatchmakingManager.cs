@@ -17,6 +17,7 @@ public interface IMatchmakingService
 {
     Task CreateSessionAsync(string sessionName);
     Task JoinSessionAsync(string lobbyId);
+    Task LeaveSessionAsync();
     Task<List<Lobby>> FetchAvailableSessionsAsync();
 }
 #endregion
@@ -71,6 +72,35 @@ public class MatchmakingManager : MonoBehaviour, IMatchmakingService
         NetworkManager.Singleton.GetComponent<UnityTransport>().SetRelayServerData(relayServerData);
 
         NetworkManager.Singleton.StartClient();
+    }
+
+    public async Task LeaveSessionAsync()
+    {
+        if (_currentLobby == null)
+        {
+            return;
+        }
+
+        string lobbyId = _currentLobby.Id;
+        bool isLobbyHost = _currentLobby.HostId == AuthenticationService.Instance.PlayerId;
+        _currentLobby = null;
+
+        try
+        {
+            if (isLobbyHost)
+            {
+                await LobbyService.Instance.DeleteLobbyAsync(lobbyId);
+            }
+            else
+            {
+                await LobbyService.Instance.RemovePlayerAsync(lobbyId, AuthenticationService.Instance.PlayerId);
+            }
+        }
+        catch (LobbyServiceException exception)
+        {
+            // Lobby moglo juz zniknac (np. host wyszedl pierwszy) - nic wiecej do sprzatania.
+            Debug.LogWarning(exception.Message);
+        }
     }
 
     public async Task<List<Lobby>> FetchAvailableSessionsAsync()
