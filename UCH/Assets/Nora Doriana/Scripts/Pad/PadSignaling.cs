@@ -14,6 +14,10 @@ public sealed class PadSignaling
 {
     private const string LobbyName = "Pady";
     private const float HeartbeatIntervalSeconds = 15f;
+    // Lobby wpuszcza ~1 heartbeat na sekunde na gracza, a host podtrzymuje tez lobby z MatchmakingManager -
+    // przesuniecie i szybka ponowna proba, zeby oba nie trafialy w te sama sekunde.
+    private const float FirstHeartbeatDelaySeconds = 7.5f;
+    private const float HeartbeatRetrySeconds = 2f;
     private const float MinRefreshIntervalSeconds = 1.1f;  // limit Lobby: odczyt max raz na sekunde
     private const float FallbackRefreshIntervalSeconds = 3f;  // gdyby powiadomienia z Lobby nie doszly
 
@@ -43,6 +47,7 @@ public sealed class PadSignaling
     public async Task StartAsync()
     {
         _lobby = await LobbyService.Instance.CreateLobbyAsync(LobbyName, _maxPads + 1, new CreateLobbyOptions { IsPrivate = true });
+        _nextHeartbeatTime = Time.unscaledTime + FirstHeartbeatDelaySeconds;
 
         var callbacks = new LobbyEventCallbacks();
         callbacks.PlayerJoined += _ => RequestRefresh();
@@ -70,7 +75,7 @@ public sealed class PadSignaling
         if (now >= _nextHeartbeatTime)
         {
             _nextHeartbeatTime = now + HeartbeatIntervalSeconds;
-            Fire(LobbyService.Instance.SendHeartbeatPingAsync(_lobby.Id));
+            SendHeartbeatAsync();
         }
 
         bool isRefreshDue = _isRefreshRequested || now >= _nextRefreshTime;
@@ -96,7 +101,41 @@ public sealed class PadSignaling
             { GetAnswerKey(playerId), new DataObject(DataObject.VisibilityOptions.Member, PadSdp.FormatAnswer(playerId, nonce, sdp)) }
         };
 
-        Fire(LobbyService.Instance.UpdateLobbyAsync(_lobby.Id, new UpdateLobbyOptions { Data = data }));
+        PublishAsync(playerId, data);
+    }
+
+    private async void PublishAsync(string playerId, Dictionary<string, DataObject> data)
+    {
+        try
+        {
+            await LobbyService.Instance.UpdateLobbyAsync(_lobby.Id, new UpdateLobbyOptions { Data = data });
+            Debug.Log($"Pady: odpowiedz dla telefonu {ShortId(playerId)} opublikowana w lobby.");
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Pady: nie udalo sie opublikowac odpowiedzi dla {ShortId(playerId)} ({exception.Message}).");
+        }
+    }
+
+    private async void SendHeartbeatAsync()
+    {
+        try
+        {
+            await LobbyService.Instance.SendHeartbeatPingAsync(_lobby.Id);
+        }
+        catch (LobbyServiceException exception) when (exception.Reason == LobbyExceptionReason.RateLimited)
+        {
+            _nextHeartbeatTime = Time.unscaledTime + HeartbeatRetrySeconds;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Pady: heartbeat lobby nie powiodl sie ({exception.Message}).");
+        }
+    }
+
+    public static string ShortId(string playerId)
+    {
+        return playerId.Length > 6 ? playerId.Substring(0, 6) : playerId;
     }
 
     // Telefon nie wrocil - zwalniamy jego miejsce w lobby, zeby kolejny mogl zeskanowac kod.
@@ -190,6 +229,7 @@ public sealed class PadSignaling
             }
 
             _handledNonces[player.Id] = nonce;
+            Debug.Log($"Pady: oferta od telefonu {ShortId(player.Id)} (proba {nonce}).");
             OnOfferReceived?.Invoke(player.Id, nonce, sdp);
         }
     }

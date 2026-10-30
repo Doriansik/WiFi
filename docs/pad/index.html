@@ -104,6 +104,7 @@
     <div class="spinner"></div>
     <h1 id="connectingTitle">Łączenie z hostem…</h1>
     <p>Telefon musi być w tej samej sieci Wi-Fi co komputer z grą.</p>
+    <p class="hint" id="connectingDetail"></p>
   </section>
 
   <section id="message" class="center">
@@ -299,9 +300,17 @@
     }
   }
 
+  // Etap laczenia widoczny pod tytulem - gracz moze przepisac go przy zglaszaniu problemu.
+  function setDetail(text) {
+    $('connectingDetail').textContent = text;
+  }
+
   async function connectPeer() {
     closePeer();
     const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    peer.oniceconnectionstatechange = () => {
+      if (pc === peer && peer.iceConnectionState !== 'connected') setDetail('Wi-Fi: ' + peer.iceConnectionState);
+    };
     const control = peer.createDataChannel('ctl');
     const input = peer.createDataChannel('in', { ordered: false, maxRetransmits: 0 });
     [control, input].forEach(channel => {
@@ -319,6 +328,7 @@
     const nonce = randomHex(4);
     const offer = nonce + '|' + fitSdp(peer.localDescription.sdp, MAX_LOBBY_VALUE - nonce.length - 1);
     await lobbyFetch('POST', `/${lobbyId}/players/${auth.userId}`, { data: { o: { value: offer, visibility: 'member' } } });
+    setDetail('Czekam na odpowiedź hosta…');
 
     // Host odpowiada w danych lobby: idGracza|nonce|sdp.
     const prefix = `${auth.userId}|${nonce}|`;
@@ -337,10 +347,15 @@
         if (e.status !== 429) throw e;  // 429 = za czesto, po prostu probujemy dalej
       }
     }
-    if (!answer) throw new Error('host nie odpowiedzial');
+    if (!answer) throw new Error('host nie odpowiedział – czy gra na komputerze jest w lobby?');
 
+    setDetail('Łączenie bezpośrednie po Wi-Fi…');
     await peer.setRemoteDescription({ type: 'answer', sdp: answer });
-    await waitForOpen(control);
+    try {
+      await waitForOpen(control);
+    } catch (e) {
+      throw new Error('brak bezpośredniego połączenia po Wi-Fi (' + peer.iceConnectionState + ')');
+    }
 
     peer.onconnectionstatechange = () => {
       if (pc === peer && peer.connectionState === 'failed') reconnect();
@@ -360,7 +375,9 @@
     if (connecting) return;
     connecting = true;
     let delay = 500;
+    let attempt = 0;
     while (true) {
+      attempt++;
       try {
         $('connectingTitle').textContent = 'Logowanie…';
         if (!auth) auth = await signIn();
@@ -379,6 +396,7 @@
           break;
         }
         console.warn('Pad: proba polaczenia nieudana', e);
+        setDetail(`Próba ${attempt} nieudana: ${e.message}. Ponawiam…`);
         await sleep(delay);
         delay = Math.min(delay * 2, 4000);
       }

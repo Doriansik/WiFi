@@ -55,7 +55,7 @@ public sealed class PadRtcHost : IDisposable
         {
             iceServers = new[] { new RTCIceServer { urls = new[] { StunServer } } }
         };
-        var link = new RtcPadLink(_hub, new RTCPeerConnection(ref configuration));
+        var link = new RtcPadLink(_hub, new RTCPeerConnection(ref configuration), PadSignaling.ShortId(playerId));
         _links[playerId] = link;
         RTCPeerConnection peerConnection = link.PeerConnection;
 
@@ -96,7 +96,27 @@ public sealed class PadRtcHost : IDisposable
             yield return null;
         }
 
-        onAnswer(link.IsClosed ? null : peerConnection.LocalDescription.sdp);
+        if (link.IsClosed)
+        {
+            onAnswer(null);
+            yield break;
+        }
+
+        string answerSdp = peerConnection.LocalDescription.sdp;
+        Debug.Log($"Pady: odpowiedz WebRTC dla {PadSignaling.ShortId(playerId)}, kandydaci hosta: {DescribeCandidates(answerSdp)}, telefonu: {DescribeCandidates(resolvedOffer)}");
+        onAnswer(answerSdp);
+    }
+
+    // Do logu: "host 192.168.1.7:51923, srflx 46.1.2.3:62927" - od razu widac, czy telefon jest w tej samej sieci.
+    private static string DescribeCandidates(string sdp)
+    {
+        IEnumerable<string> candidates = sdp.Split('\n')
+            .Where(line => line.StartsWith("a=candidate:"))
+            .Select(line => line.Trim().Split(' '))
+            .Where(fields => fields.Length >= 8)
+            .Select(fields => $"{fields[7]} {fields[4]}:{fields[5]}");
+        string result = string.Join(", ", candidates);
+        return result.Length > 0 ? result : "brak";
     }
 
     public void Forget(string playerId)
@@ -154,6 +174,7 @@ public sealed class PadRtcHost : IDisposable
             if (address != null)
             {
                 addresses[lookup.Key] = address.ToString();
+                Debug.Log($"Pady: adres telefonu {lookup.Key} -> {address}");
             }
             else
             {
@@ -168,18 +189,21 @@ public sealed class PadRtcHost : IDisposable
     private sealed class RtcPadLink : IPadLink
     {
         private readonly PadHub _hub;
+        private readonly string _logName;
         private RTCDataChannel _controlChannel;
         private RTCDataChannel _inputChannel;
 
         public RTCPeerConnection PeerConnection { get; }
         public bool IsClosed { get; private set; }
 
-        public RtcPadLink(PadHub hub, RTCPeerConnection peerConnection)
+        public RtcPadLink(PadHub hub, RTCPeerConnection peerConnection, string logName)
         {
             _hub = hub;
+            _logName = logName;
             PeerConnection = peerConnection;
             PeerConnection.OnDataChannel = HandleDataChannel;
             PeerConnection.OnConnectionStateChange = HandleConnectionStateChange;
+            PeerConnection.OnIceConnectionChange = state => Debug.Log($"Pady: {_logName} ICE: {state}");
         }
 
         // Tekst zawsze jako bajty UTF-8 - Send(string) w Unity WebRTC wysyla ANSI.
@@ -204,6 +228,7 @@ public sealed class PadRtcHost : IDisposable
             IsClosed = true;
             PeerConnection.OnDataChannel = null;
             PeerConnection.OnConnectionStateChange = null;
+            PeerConnection.OnIceConnectionChange = null;
             _controlChannel?.Dispose();
             _inputChannel?.Dispose();
             PeerConnection.Close();
@@ -237,6 +262,8 @@ public sealed class PadRtcHost : IDisposable
 
         private void HandleConnectionStateChange(RTCPeerConnectionState state)
         {
+            Debug.Log($"Pady: {_logName} polaczenie: {state}");
+
             if (state == RTCPeerConnectionState.Failed || state == RTCPeerConnectionState.Closed)
             {
                 _hub.HandleLinkClosed(this);

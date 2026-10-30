@@ -133,6 +133,8 @@ public class PadServer : MonoBehaviour
     {
         PadPlayer padPlayer = _padPlayers.Find(player => player.Session == padEvent.Session);
 
+        Debug.Log($"Pady: telefon {padEvent.Session.Name} ({PadSignaling.ShortId(padEvent.Session.Id)}) - {padEvent.Type}");
+
         if (padEvent.Type == PadEventType.Disconnected)
         {
             if (padPlayer != null)
