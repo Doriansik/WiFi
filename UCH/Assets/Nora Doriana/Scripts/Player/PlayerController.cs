@@ -8,12 +8,20 @@ public class PlayerController : NetworkBehaviour
 
     [SerializeField] private Rigidbody2D _rigidbody;
 
+    // Postac telefonu-pada: sterowanie tylko z jego telefonu, nigdy z klawiatury hosta.
+    private PadInput _padInput;
+
     private void Awake()
     {
         if (_rigidbody == null)
         {
             _rigidbody = GetComponent<Rigidbody2D>();
         }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        TryGetComponent(out _padInput);
     }
 
     private void FixedUpdate()
@@ -49,6 +57,14 @@ public class PlayerController : NetworkBehaviour
 
     private void HandleMovement()
     {
+        float horizontalInput = _padInput != null ? _padInput.GetHorizontalInput() : GetLocalHorizontalInput();
+
+        Vector2 targetVelocity = new Vector2(horizontalInput * MovementSpeed, _rigidbody.linearVelocity.y);
+        _rigidbody.linearVelocity = targetVelocity;
+    }
+
+    private float GetLocalHorizontalInput()
+    {
         float horizontalInput = 0f;
 
         if (MobileInputManager.Instance != null)
@@ -61,11 +77,20 @@ public class PlayerController : NetworkBehaviour
             horizontalInput = Input.GetAxisRaw("Horizontal");
         }
 
-        Vector2 targetVelocity = new Vector2(horizontalInput * MovementSpeed, _rigidbody.linearVelocity.y);
-        _rigidbody.linearVelocity = targetVelocity;
+        return horizontalInput;
     }
 
     private void HandleJump()
+    {
+        bool isJumpRequested = _padInput != null ? _padInput.ConsumeJumpPress() : GetLocalJumpInput();
+
+        if (isJumpRequested && Mathf.Abs(_rigidbody.linearVelocity.y) < 0.01f)
+        {
+            _rigidbody.AddForce(Vector2.up * JumpForce, ForceMode2D.Impulse);
+        }
+    }
+
+    private bool GetLocalJumpInput()
     {
         bool isJumpRequested = false;
 
@@ -79,9 +104,6 @@ public class PlayerController : NetworkBehaviour
             isJumpRequested = Input.GetButtonDown("Jump");
         }
 
-        if (isJumpRequested && Mathf.Abs(_rigidbody.linearVelocity.y) < 0.01f)
-        {
-            _rigidbody.AddForce(Vector2.up * JumpForce, ForceMode2D.Impulse);
-        }
+        return isJumpRequested;
     }
 }

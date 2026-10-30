@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -66,11 +67,21 @@ public class MainMenuUI : MonoBehaviour
             return;
         }
 
-        await _matchmakingManager.CreateSessionAsync(_defaultSessionName);
+        try
+        {
+            await _matchmakingManager.CreateSessionAsync(_defaultSessionName);
+        }
+        catch (Exception exception)
+        {
+            // Bez internetu nie ma Relay/Lobby - pady z telefonow i tak dzialaja w sieci lokalnej.
+            Debug.LogWarning($"Relay/Lobby niedostepne, start bez internetu: {exception.Message}");
+            _matchmakingManager.StartLocalHost();
+        }
 
         // Klienci dostana scene lobby automatycznie po polaczeniu (synchronizacja scen Netcode).
         if (NetworkManager.Singleton.IsServer)
         {
+            PadServer.StartForHost();
             NetworkManager.Singleton.SceneManager.LoadScene(SceneNames.Lobby, LoadSceneMode.Single);
         }
     }

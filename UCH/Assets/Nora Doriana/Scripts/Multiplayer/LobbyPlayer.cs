@@ -24,13 +24,19 @@ public class LobbyPlayer : NetworkBehaviour, IPlayerReady
 
     private NetworkVariable<bool> _isReady = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
     private NetworkVariable<FixedString64Bytes> _deviceName = new NetworkVariable<FixedString64Bytes>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    private NetworkVariable<bool> _isPadPlayer = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public event Action<bool> OnReadyStateChanged;
+
+    // Gracz z telefonu (pad w przegladarce) - jego obiekt nalezy do serwera, tak jak postac hosta.
+    public bool IsPadPlayer => _isPadPlayer.Value;
+    public bool IsHostPlayer => OwnerClientId == NetworkManager.ServerClientId && !IsPadPlayer;
 
     public override void OnNetworkSpawn()
     {
         _isReady.OnValueChanged += HandleReadyStateChanged;
         _deviceName.OnValueChanged += HandleDeviceNameChanged;
+        _isPadPlayer.OnValueChanged += HandlePadPlayerChanged;
 
         if (IsOwner)
         {
@@ -45,6 +51,7 @@ public class LobbyPlayer : NetworkBehaviour, IPlayerReady
     {
         _isReady.OnValueChanged -= HandleReadyStateChanged;
         _deviceName.OnValueChanged -= HandleDeviceNameChanged;
+        _isPadPlayer.OnValueChanged -= HandlePadPlayerChanged;
 
         _spawnedPlayers.Remove(this);
         OnPlayerListChanged?.Invoke();
@@ -68,6 +75,18 @@ public class LobbyPlayer : NetworkBehaviour, IPlayerReady
         return _deviceName.Value.ToString();
     }
 
+    // Wywoluje PadServer na hoscie - nazwe wpisuje gracz na telefonie.
+    public void InitializeAsPad(string deviceName)
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        _isPadPlayer.Value = true;
+        _deviceName.Value = TruncateDeviceName(deviceName);
+    }
+
     private void HandleReadyStateChanged(bool previousValue, bool newValue)
     {
         OnReadyStateChanged?.Invoke(newValue);
@@ -79,10 +98,18 @@ public class LobbyPlayer : NetworkBehaviour, IPlayerReady
         OnPlayerListChanged?.Invoke();
     }
 
+    private void HandlePadPlayerChanged(bool previousValue, bool newValue)
+    {
+        OnPlayerListChanged?.Invoke();
+    }
+
     private static FixedString64Bytes GetLocalDeviceName()
     {
-        string deviceName = SystemInfo.deviceName;
+        return TruncateDeviceName(SystemInfo.deviceName);
+    }
 
+    private static FixedString64Bytes TruncateDeviceName(string deviceName)
+    {
         if (deviceName.Length > MaxDeviceNameLength)
         {
             deviceName = deviceName.Substring(0, MaxDeviceNameLength);

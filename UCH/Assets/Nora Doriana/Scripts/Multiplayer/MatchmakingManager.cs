@@ -7,7 +7,6 @@ using Unity.Networking.Transport.Relay;
 using Unity.Services.Authentication;
 using Unity.Services.Lobbies;
 using Unity.Services.Lobbies.Models;
-using Unity.Services.Lobby;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
@@ -59,6 +58,15 @@ public class MatchmakingManager : MonoBehaviour, IMatchmakingService
         NetworkManager.Singleton.GetComponent<UnityTransport>().SetRelayServerData(relayServerData);
 
         NetworkManager.Singleton.StartHost();
+    }
+
+    // Host bez Relay i Lobby (brak internetu) - wystarczy dla padow z telefonow w tej samej sieci.
+    public void StartLocalHost()
+    {
+        if (!NetworkManager.Singleton.IsListening)
+        {
+            NetworkManager.Singleton.StartHost();
+        }
     }
 
     public async Task JoinSessionAsync(string lobbyId)

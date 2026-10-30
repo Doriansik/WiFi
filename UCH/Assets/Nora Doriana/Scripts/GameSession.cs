@@ -13,6 +13,7 @@ public static class GameSession
     public static void ReturnToMainMenu()
     {
         Time.timeScale = 1f;
+        PadServer.Shutdown();
 
         NetworkManager networkManager = NetworkManager.Singleton;
 

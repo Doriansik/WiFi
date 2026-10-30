@@ -72,7 +72,7 @@ public class LobbyUI : MonoBehaviour
     private static bool AreAllClientsReady()
     {
         return LobbyPlayer.SpawnedPlayers
-            .Where(player => player.OwnerClientId != NetworkManager.ServerClientId)
+            .Where(player => !player.IsHostPlayer)
             .All(player => player.GetReadyState());
     }
 
@@ -81,20 +81,24 @@ public class LobbyUI : MonoBehaviour
         StringBuilder builder = new StringBuilder();
         builder.AppendLine($"Gracze ({LobbyPlayer.SpawnedPlayers.Count}):");
 
-        foreach (LobbyPlayer player in LobbyPlayer.SpawnedPlayers.OrderBy(player => player.OwnerClientId))
-        {
-            builder.Append($"{player.OwnerClientId + 1}. {player.GetDeviceName()}");
+        // Pady z telefonow naleza do serwera (to samo OwnerClientId co host), wiec numerujemy po kolei.
+        int number = 1;
 
-            if (player.OwnerClientId == NetworkManager.ServerClientId)
+        foreach (LobbyPlayer player in LobbyPlayer.SpawnedPlayers.OrderBy(player => player.OwnerClientId).ThenBy(player => player.IsPadPlayer))
+        {
+            builder.Append($"{number++}. {player.GetDeviceName()}");
+
+            if (player.IsHostPlayer)
             {
                 builder.Append(" (Host)");
             }
             else
             {
+                builder.Append(player.IsPadPlayer ? " (telefon)" : string.Empty);
                 builder.Append(player.GetReadyState() ? " - gotowy" : " - niegotowy");
             }
 
-            if (player.OwnerClientId == networkManager.LocalClientId)
+            if (player.OwnerClientId == networkManager.LocalClientId && !player.IsPadPlayer)
             {
                 builder.Append(" (Ty)");
             }
