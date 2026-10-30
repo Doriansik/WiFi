@@ -49,7 +49,7 @@
   .spinner { width: 40px; height: 40px; border-radius: 50%; border: 4px solid var(--line); border-top-color: var(--pc); animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  #lobby { flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  #lobby { flex-direction: column; align-items: center; justify-content: safe center; gap: 18px; overflow-y: auto; }
   label { color: var(--muted); font-size: 14px; display: block; margin-bottom: 6px; }
   .field { width: min(360px, 100%); }
   input {
@@ -62,6 +62,23 @@
     background: transparent; color: var(--text); font: inherit; font-size: 24px; font-weight: 800; letter-spacing: 0.04em;
   }
   #ready.on { background: var(--pc); color: #fff; }
+
+  /* Arkusze postaci: 4 klatki 32 px obok siebie, te same pliki co w grze */
+  .skins { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; --s: 48px; }
+  @media (min-width: 400px) { .skins { --s: 64px; } }
+  .skin {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 5px; min-width: 0;
+    border: 2px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; font-size: 12px;
+  }
+  .skin .sprite {
+    width: var(--s); height: var(--s); background-repeat: no-repeat; background-size: calc(var(--s) * 4) var(--s);
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .skin.on { border-color: var(--pc); background: #2a2f3a; }
+  .skin.on .sprite { animation: walk 0.5s steps(4) infinite; }
+  @keyframes walk { to { background-position: calc(var(--s) * -4) 0; } }
+  .skin:disabled { opacity: 0.35; }
+  .skin small { color: var(--muted); font-size: 10px; min-height: 1.2em; }
   .hint { color: var(--muted); font-size: 14px; text-align: center; }
 
   #game { padding: 0; }
@@ -84,6 +101,42 @@
     background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; color: var(--muted); font-size: 14px;
   }
   @media (orientation: portrait) { .rotate { display: block; } }
+
+  /* Budowanie: krzyzak kursora po lewej, wybor obiektu i postawienie po prawej */
+  #build { padding: 0; touch-action: none; }
+  .buildControls {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 4vmin 5vmin; gap: 4vmin; transition: opacity 120ms;
+  }
+  .dpad { --d: min(19vmin, 15vw); display: grid; grid-template-columns: repeat(3, var(--d)); grid-template-rows: repeat(3, var(--d)); gap: 1.5vmin; }
+  .dpad .btn { min-width: 64px; min-height: 64px; }
+  .dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
+  .buildSide { display: flex; flex-direction: column; gap: 3vmin; width: min(44vw, 360px); }
+  .myItem { display: flex; align-items: center; justify-content: center; gap: 3vmin; min-height: 64px; }
+  .myItem b { font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Obrazek obiektu: pierwsza klatka arkusza PNG, piksele bez rozmycia */
+  .itemArt { background-repeat: no-repeat; background-position: 0 0; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* Wybor z puli rundy - kto pierwszy, ten lepszy */
+  .pickView { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: safe center; gap: 3vmin; padding: 3vmin 4vmin; overflow-y: auto; }
+  #build.picking .pickView { display: flex; }
+  #build.picking .buildControls { display: none; }
+  .pickView h2 { margin: 0; font-size: 20px; }
+  .pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; width: 100%; max-width: 760px; }
+  .slot {
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 4px; padding: 8px 4px 6px; min-width: 0;
+    border: 2px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; font-size: 13px;
+  }
+  .slot .art { width: 100%; height: 56px; display: grid; place-items: center; }
+  .slot small { color: var(--muted); font-size: 11px; min-height: 1.2em; }
+  .slot:disabled { opacity: 0.35; }
+  .slot.mine { border-color: var(--pc); opacity: 1; }
+  .buildSide .wide { height: min(17vmin, 84px); min-height: 56px; font-weight: 800; font-size: 20px; letter-spacing: 0.04em; }
+  .buildSide .primary { background: var(--pc); color: #fff; }
+  .placedInfo { position: absolute; inset: 0; display: none; place-items: center; text-align: center; padding: 16px; font-size: 22px; font-weight: 800; }
+  #build.placed .buildControls { opacity: 0.2; pointer-events: none; }
+  #build.placed .placedInfo { display: grid; }
 
   #overlay {
     position: fixed; inset: 0; display: none; place-items: center; background: rgba(10, 12, 16, 0.78); z-index: 5;
@@ -117,6 +170,10 @@
       <label for="name">Twoja nazwa</label>
       <input id="name" maxlength="20" autocomplete="off" enterkeyhint="done">
     </div>
+    <div class="field">
+      <label>Twoja postać</label>
+      <div class="skins" id="skins"></div>
+    </div>
     <button id="ready" type="button">GOTOWY</button>
     <div class="hint">Patrz na ekran hosta – gra wystartuje, gdy wszyscy będą gotowi.</div>
   </section>
@@ -130,6 +187,28 @@
       </div>
       <div class="btn jump" data-btn="4" aria-label="Skok"><svg viewBox="0 0 24 24"><path d="M12 5 4 16h16z"/></svg></div>
     </div>
+  </section>
+
+  <section id="build">
+    <div class="rotate">Obróć telefon poziomo</div>
+    <div class="buildControls">
+      <div class="dpad">
+        <div class="btn up" data-move="0,1" aria-label="Kursor w górę"><svg viewBox="0 0 24 24"><path d="M12 5 4 16h16z"/></svg></div>
+        <div class="btn left" data-move="-1,0" aria-label="Kursor w lewo"><svg viewBox="0 0 24 24"><path d="M15.5 4 6.5 12l9 8z"/></svg></div>
+        <div class="btn right" data-move="1,0" aria-label="Kursor w prawo"><svg viewBox="0 0 24 24"><path d="M8.5 4l9 8-9 8z"/></svg></div>
+        <div class="btn down" data-move="0,-1" aria-label="Kursor w dół"><svg viewBox="0 0 24 24"><path d="M12 19 4 8h16z"/></svg></div>
+      </div>
+      <div class="buildSide">
+        <div class="myItem"><span class="itemArt" id="itemArt"></span><b id="itemName">—</b></div>
+        <div class="btn wide" data-build="r">OBRÓĆ</div>
+        <div class="btn wide primary" data-build="p">POSTAW</div>
+      </div>
+    </div>
+    <div class="pickView">
+      <h2>Weź obiekt z puli</h2>
+      <div class="pool" id="pool"></div>
+    </div>
+    <div class="placedInfo">Postawione! Czekamy na resztę…</div>
   </section>
 </main>
 
@@ -153,6 +232,26 @@
   const PING_INTERVAL_MS = 500;       // czeste pingi trzymaja Wi-Fi telefonu w trybie aktywnym (mniejsze skoki opoznienia)
   const DEAD_AFTER_MS = 3000;
   const VIBRATE_MS = 8;
+  // Te same identyfikatory co SkinDefinition.Id w prefabie gracza; obrazki w skins/<id>.png
+  const SKINS = [
+    { id: 'sausage', name: 'Parówka' },
+    { id: 'avocado', name: 'Awokado' },
+    { id: 'coffee', name: 'Kawa' },
+    { id: 'milk', name: 'Mleko' },
+    { id: 'potato', name: 'Ziemniak' }
+  ];
+  // Obiekty do budowania - te same Id co w PlacementManager (Gamephase); obrazki w items/<id>.png.
+  // w x h = rozmiar w kratkach, frames = ile klatek animacji lezy obok siebie w pliku.
+  const ITEMS = {
+    bread: { name: 'Chleb', w: 1, h: 1, frames: 4 },
+    honey: { name: 'Miód', w: 2, h: 1, frames: 1 },
+    ice: { name: 'Lód', w: 1, h: 1, frames: 1 },
+    fork: { name: 'Widelec', w: 3, h: 1, frames: 1 },
+    knife: { name: 'Nóż', w: 4, h: 1, frames: 1 },
+    cheese_stairs: { name: 'Ser', w: 2, h: 2, frames: 1 },
+    toaster: { name: 'Toster', w: 2, h: 2, frames: 1 },
+    catapult: { name: 'Katapulta', w: 1, h: 1, frames: 7 }
+  };
 
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -179,6 +278,9 @@
   let wasConnected = false;
   let connecting = false;
   let rttSmoothed = null;
+  let myItem = '';
+  let mySkin = null;
+  let takenSkins = new Set();  // postacie innych graczy - przysyla host
 
   const nameInput = $('name');
   nameInput.value = name;
@@ -187,7 +289,8 @@
   function show(id) {
     screenName = id;
     document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === id));
-    $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', connecting: 'Łączenie…' }[id] || '';
+    $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', build: 'Budowanie', connecting: 'Łączenie…' }[id] || '';
+    if (id !== 'build') stopRepeat();
     if (id !== 'game') setMask(0);
   }
 
@@ -368,6 +471,8 @@
     mask = 0;
     control.send(`h|${auth.userId}|${name}`);
     control.send('r|' + (ready ? 1 : 0));
+    const savedSkin = store.get('padSkin');
+    if (savedSkin) control.send('k|' + savedSkin);  // host odpowie, czy ta postac jest wolna
     sendInput();
   }
 
@@ -430,7 +535,22 @@
         document.querySelector('meta[name=theme-color]').content = parts[2];
         break;
       case 's':
-        show(parts[1] === 'game' ? 'game' : 'lobby');
+        show(parts[1] === 'game' || parts[1] === 'build' ? parts[1] : 'lobby');
+        break;
+      case 'q':
+        renderPool((parts[1] || '').split(',').filter(Boolean).map(slot => slot.split(':')));
+        break;
+      case 'b':
+        myItem = parts[1] || '';
+        $('itemName').textContent = ITEMS[myItem] ? ITEMS[myItem].name : myItem;
+        drawItem($('itemArt'), myItem, 96, 48);
+        $('build').classList.toggle('picking', !myItem);
+        $('build').classList.toggle('placed', parts[2] === '1');
+        break;
+      case 'k':
+        mySkin = parts[1];
+        takenSkins = new Set((parts[2] || '').split(',').filter(Boolean));
+        renderSkins();
         break;
       case 'o':
         showPing(performance.now() - parseFloat(parts[1]));
@@ -496,7 +616,7 @@
   // Pelny ekran + poziomo przy pierwszym dotknieciu gry (przegladarka wymaga gestu uzytkownika).
   let fullscreenTried = false;
   document.addEventListener('touchend', () => {
-    if (screenName !== 'game' || fullscreenTried) return;
+    if ((screenName !== 'game' && screenName !== 'build') || fullscreenTried) return;
     fullscreenTried = true;
     const root = document.documentElement;
     const request = root.requestFullscreen || root.webkitRequestFullscreen;
@@ -524,6 +644,83 @@
   document.addEventListener('keydown', onKey);
   document.addEventListener('keyup', onKey);
 
+  // ---------- Budowanie ----------
+
+  // Polecenia ida kanalem niezawodnym - kazdy krok kursora dochodzi. Przytrzymana strzalka powtarza ruch.
+  const REPEAT_DELAY_MS = 300;
+  const REPEAT_INTERVAL_MS = 110;
+  let repeatTimer = 0;
+  let pressedBuildButton = null;
+
+  function stopRepeat() {
+    clearTimeout(repeatTimer);
+    clearInterval(repeatTimer);
+    repeatTimer = 0;
+    if (pressedBuildButton) pressedBuildButton.classList.remove('pressed');
+    pressedBuildButton = null;
+  }
+
+  function buildCommand(button) {
+    if (button.dataset.move) return 'c|m|' + button.dataset.move.replace(',', '|');
+    if (button.dataset.slot) return 'c|k|' + button.dataset.slot;
+    return 'c|' + button.dataset.build;
+  }
+
+  // Pierwsza klatka arkusza w ramce maxWidth x maxHeight: powiekszenie o cale piksele, a dlugie obiekty (noz) pomniejszone.
+  function drawItem(element, id, maxWidth, maxHeight) {
+    const item = ITEMS[id];
+    if (!item) { element.style.cssText = ''; return; }
+    const fit = Math.min(maxWidth / (32 * item.w), maxHeight / (32 * item.h));
+    const scale = fit >= 1 ? Math.floor(fit) : fit;
+    const width = item.w * 32 * scale, height = item.h * 32 * scale;
+    element.style.width = width + 'px';
+    element.style.height = height + 'px';
+    element.style.backgroundImage = `url(items/${id}.png)`;
+    element.style.backgroundSize = `${width * item.frames}px ${height}px`;
+  }
+
+  // Pula: [id, '-' wolny / 'm' moj / 'x' wziety przez kogos innego]
+  function renderPool(slots) {
+    const pool = $('pool');
+    pool.textContent = '';
+    slots.forEach(([id, owner], index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'slot' + (owner === 'm' ? ' mine' : '');
+      button.dataset.slot = index;
+      button.disabled = owner !== '-';
+      const art = document.createElement('span');
+      art.className = 'art';
+      const sprite = document.createElement('span');
+      sprite.className = 'itemArt';
+      drawItem(sprite, id, 80, 52);
+      art.append(sprite);
+      const label = document.createElement('span');
+      label.textContent = ITEMS[id] ? ITEMS[id].name : id;
+      const status = document.createElement('small');
+      status.textContent = owner === 'm' ? 'Twój' : owner === 'x' ? 'zajęty' : '';
+      button.append(art, label, status);
+      pool.append(button);
+    });
+  }
+
+  $('build').addEventListener('pointerdown', e => {
+    const button = e.target.closest('[data-move], [data-slot], [data-build]');
+    if (button && button.disabled) return;
+    if (!button || $('build').classList.contains('placed')) return;
+    e.preventDefault();
+    stopRepeat();
+    const command = buildCommand(button);
+    sendControl(command);
+    if (navigator.vibrate) navigator.vibrate(VIBRATE_MS);
+    pressedBuildButton = button;
+    button.classList.add('pressed');
+    if (button.dataset.move) {
+      repeatTimer = setTimeout(() => { repeatTimer = setInterval(() => sendControl(command), REPEAT_INTERVAL_MS); }, REPEAT_DELAY_MS);
+    }
+  });
+  ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, stopRepeat));
+
   $('ready').addEventListener('click', () => {
     ready = !ready;
     renderReady();
@@ -533,6 +730,46 @@
   function renderReady() {
     $('ready').classList.toggle('on', ready);
     $('ready').textContent = ready ? 'GOTOWY ✓' : 'GOTOWY';
+  }
+
+  // Kazdy gra inna postacia, dopoki starcza wolnych - gdy wszystkie sa zajete, wolno sie powtarzac (tak samo liczy host).
+  const canPickSkin = id => !takenSkins.has(id) || SKINS.every(skin => takenSkins.has(skin.id));
+
+  function buildSkins() {
+    for (const skin of SKINS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'skin';
+      button.dataset.skin = skin.id;
+      const sprite = document.createElement('span');
+      sprite.className = 'sprite';
+      sprite.style.backgroundImage = `url(skins/${skin.id}.png)`;
+      const label = document.createElement('span');
+      label.textContent = skin.name;
+      button.append(sprite, label, document.createElement('small'));
+      button.addEventListener('click', () => pickSkin(skin.id));
+      $('skins').append(button);
+    }
+  }
+
+  function renderSkins() {
+    document.querySelectorAll('.skin').forEach(button => {
+      const id = button.dataset.skin;
+      const isMine = id === mySkin;
+      button.classList.toggle('on', isMine);
+      button.disabled = !isMine && !canPickSkin(id);
+      button.querySelector('small').textContent = button.disabled ? 'zajęta' : '';
+    });
+  }
+
+  // Wybor widac od razu; jesli ktos byl szybszy, host odesle aktualny stan i kafelek wroci.
+  function pickSkin(id) {
+    if (id === mySkin || !canPickSkin(id)) return;
+    mySkin = id;
+    store.set('padSkin', id);
+    renderSkins();
+    sendControl('k|' + id);
+    if (navigator.vibrate) navigator.vibrate(VIBRATE_MS);
   }
 
   let nameTimer = 0;
@@ -557,6 +794,8 @@
   });
 
   renderReady();
+  buildSkins();
+  renderSkins();
   if (!lobbyCode) {
     showMessage('Brak kodu gry', 'Zeskanuj kod QR z ekranu komputera, na którym działa gra.');
   } else {

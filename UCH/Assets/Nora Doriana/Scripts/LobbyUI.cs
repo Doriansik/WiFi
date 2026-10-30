@@ -36,6 +36,7 @@ public class LobbyUI : MonoBehaviour
         }
 
         LobbyPlayer.OnPlayerListChanged += Refresh;
+        PlayerSkin.OnSkinsChanged += Refresh;
         NetworkManager.Singleton.OnClientStopped += HandleClientStopped;
         Refresh();
     }
@@ -45,6 +46,7 @@ public class LobbyUI : MonoBehaviour
         _startButton.onClick.RemoveListener(OnStartClicked);
         _leaveButton.onClick.RemoveListener(OnLeaveClicked);
         LobbyPlayer.OnPlayerListChanged -= Refresh;
+        PlayerSkin.OnSkinsChanged -= Refresh;
 
         if (NetworkManager.Singleton != null)
         {
@@ -87,6 +89,11 @@ public class LobbyUI : MonoBehaviour
         foreach (LobbyPlayer player in LobbyPlayer.SpawnedPlayers.OrderBy(player => player.OwnerClientId).ThenBy(player => player.IsPadPlayer))
         {
             builder.Append($"{number++}. {player.GetDeviceName()}");
+
+            if (player.TryGetComponent(out PlayerSkin playerSkin) && playerSkin.CurrentSkin != null)
+            {
+                builder.Append($" [{playerSkin.CurrentSkin.DisplayName}]");
+            }
 
             if (player.IsHostPlayer)
             {

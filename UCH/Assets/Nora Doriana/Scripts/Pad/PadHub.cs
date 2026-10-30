@@ -12,6 +12,24 @@ public interface IPadLink
 }
 #endregion
 
+#region Pad Command
+public enum PadCommandType
+{
+    MoveCursor,
+    PickItem,
+    Rotate,
+    Place
+}
+
+// Polecenie budowania z telefonu - idzie kanalem niezawodnym, wiec zaden krok kursora nie ginie.
+public struct PadCommand
+{
+    public PadCommandType Type;
+    public int X;
+    public int Y;
+}
+#endregion
+
 #region Pad Session
 // Stan jednego telefonu-pada. Wszystko dzieje sie na watku glownym Unity (WebRTC dostarcza wiadomosci w Update).
 public sealed class PadSession
@@ -20,6 +38,9 @@ public sealed class PadSession
     public const int ButtonRight = 2;
     public const int ButtonJump = 4;
     public const int AllButtons = ButtonLeft | ButtonRight | ButtonJump;
+    private const int MaxQueuedCommands = 32;
+
+    private readonly Queue<PadCommand> _commands = new Queue<PadCommand>();
 
     private int _jumpPresses;
     private int _lastInputSequence = -1;
@@ -29,6 +50,8 @@ public sealed class PadSession
     public string Name { get; internal set; }
     public int Buttons { get; private set; }
     public bool IsReady { get; internal set; }
+    public string RequestedSkin { get; private set; }  // identyfikator postaci wybranej na telefonie (null = przydziela host)
+    public int SkinRequestCount { get; private set; }  // ponowny wybor tej samej postaci tez sie liczy (wczesniej mogla byc zajeta)
     public bool IsConnected => Link != null;
 
     internal IPadLink Link { get; private set; }
@@ -38,6 +61,32 @@ public sealed class PadSession
     {
         Id = id;
         Name = name;
+    }
+
+    public bool TryDequeueCommand(out PadCommand command)
+    {
+        if (_commands.Count == 0)
+        {
+            command = default;
+            return false;
+        }
+
+        command = _commands.Dequeue();
+        return true;
+    }
+
+    internal void EnqueueCommand(PadCommand command)
+    {
+        if (_commands.Count < MaxQueuedCommands)
+        {
+            _commands.Enqueue(command);
+        }
+    }
+
+    internal void RequestSkin(string skinId)
+    {
+        RequestedSkin = skinId;
+        SkinRequestCount++;
     }
 
     // Wcisniecie skoku czeka na odebranie - tap krotszy niz klatka gry nie ginie.
@@ -93,6 +142,7 @@ public sealed class PadSession
     {
         Buttons = 0;
         _jumpPresses = 0;
+        _commands.Clear();
         _lastInputSequence = -1;
         _lastJumpCount = -1;
     }
@@ -115,8 +165,11 @@ public struct PadEvent
 
 #region Pad Hub
 // Protokol padow niezalezny od transportu. Wiadomosci "typ|dane":
-//   telefon -> host: h|id|nazwa (hello), i|sekwencja|przyciski|licznikSkokow, r|0/1 (gotowy), n|nazwa, p|czas (ping)
-//   host -> telefon: w|numer|#kolor (powitanie), s|lobby/game (faza), f (brak miejsc), o|czas (pong)
+//   telefon -> host: h|id|nazwa (hello), i|sekwencja|przyciski|licznikSkokow, r|0/1 (gotowy), n|nazwa, k|postac, p|czas (ping),
+//                    budowanie: c|k|miejsce (wez obiekt z puli), c|m|dx|dy (kursor), c|r (obrot), c|p (postaw)
+//   host -> telefon: w|numer|#kolor (powitanie), s|lobby/game/build (faza), k|mojaPostac|zajete,przez,innych,
+//                    q|obiekt:-/m/x,... (pula: wolny / moj / czyjs), b|mojObiekt|0/1 (postawiony),
+//                    f (brak miejsc), o|czas (pong)
 public sealed class PadHub
 {
     // Telefon pinguje co 0.5 s, wiec 5 s ciszy = zgubil siec albo zablokowal ekran.
@@ -224,6 +277,20 @@ public sealed class PadHub
             case "n":
                 session.Name = SanitizeName(parts.Length >= 2 ? parts[1] : null);
                 break;
+            case "k":
+                if (parts.Length >= 2 && IsValidId(parts[1]))
+                {
+                    session.RequestSkin(parts[1]);
+                }
+
+                break;
+            case "c":
+                if (TryParseCommand(parts, out PadCommand command))
+                {
+                    session.EnqueueCommand(command);
+                }
+
+                break;
         }
     }
 
@@ -296,6 +363,44 @@ public sealed class PadHub
         _sessionsByLink[link] = session;
         session.LastMessageTime = now;
         _events.Enqueue(new PadEvent { Type = PadEventType.Connected, Session = session });
+    }
+
+    private static bool TryParseCommand(string[] parts, out PadCommand command)
+    {
+        command = default;
+
+        if (parts.Length < 2)
+        {
+            return false;
+        }
+
+        switch (parts[1])
+        {
+            case "m":
+                if (parts.Length >= 4 && int.TryParse(parts[2], out int dx) && int.TryParse(parts[3], out int dy))
+                {
+                    command = new PadCommand { Type = PadCommandType.MoveCursor, X = Math.Sign(dx), Y = Math.Sign(dy) };
+                    return true;
+                }
+
+                return false;
+            case "k":
+                if (parts.Length >= 3 && int.TryParse(parts[2], out int slot) && slot >= 0)
+                {
+                    command = new PadCommand { Type = PadCommandType.PickItem, X = slot };
+                    return true;
+                }
+
+                return false;
+            case "r":
+                command = new PadCommand { Type = PadCommandType.Rotate };
+                return true;
+            case "p":
+                command = new PadCommand { Type = PadCommandType.Place };
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static bool IsValidId(string id)

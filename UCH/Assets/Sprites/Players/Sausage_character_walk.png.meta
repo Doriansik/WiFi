@@ -112,12 +112,12 @@ TextureImporter:
       name: Sausage_character_walk_0
       rect:
         serializedVersion: 2
-        x: 10
+        x: 0
         y: 0
-        width: 13
-        height: 30
-      alignment: 0
-      pivot: {x: 0, y: 0}
+        width: 32
+        height: 32
+      alignment: 9
+      pivot: {x: 0.5, y: 0.46875}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -134,12 +134,12 @@ TextureImporter:
       name: Sausage_character_walk_1
       rect:
         serializedVersion: 2
-        x: 42
+        x: 32
         y: 0
-        width: 13
-        height: 26
-      alignment: 0
-      pivot: {x: 0, y: 0}
+        width: 32
+        height: 32
+      alignment: 9
+      pivot: {x: 0.5, y: 0.46875}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -156,12 +156,12 @@ TextureImporter:
       name: Sausage_character_walk_2
       rect:
         serializedVersion: 2
-        x: 74
+        x: 64
         y: 0
-        width: 13
+        width: 32
         height: 32
-      alignment: 0
-      pivot: {x: 0, y: 0}
+      alignment: 9
+      pivot: {x: 0.5, y: 0.46875}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -178,12 +178,12 @@ TextureImporter:
       name: Sausage_character_walk_3
       rect:
         serializedVersion: 2
-        x: 106
-        y: 1
-        width: 13
-        height: 31
-      alignment: 0
-      pivot: {x: 0, y: 0}
+        x: 96
+        y: 0
+        width: 32
+        height: 32
+      alignment: 9
+      pivot: {x: 0.5, y: 0.46875}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []

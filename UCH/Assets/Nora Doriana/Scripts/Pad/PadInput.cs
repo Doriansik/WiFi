@@ -33,5 +33,10 @@ public class PadInput : MonoBehaviour
     {
         return _session.ConsumeJumpPress();
     }
+
+    public bool TryDequeueCommand(out PadCommand command)
+    {
+        return _session.TryDequeueCommand(out command);
+    }
 }
 #endregion
