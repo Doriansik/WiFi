@@ -11,6 +11,7 @@ public static class PadSdp
     public const int MaxLobbyValueLength = 2048;
     public const string OfferKey = "o";
     public const string AnswerKeyPrefix = "a";
+    public const string TurnKey = "ice";  // dane lobby: serwery TURN w formacie przegladarki (JSON)
 
     public static bool TryParseOffer(string value, out string nonce, out string sdp)
     {

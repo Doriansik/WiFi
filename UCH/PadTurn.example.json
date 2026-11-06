@@ -1,0 +1,5 @@
+{
+  "credentialsUrl": "https://rtc.live.cloudflare.com/v1/turn/keys/WKLEJ_ID_KLUCZA_TURN/credentials/generate-ice-servers",
+  "apiToken": "WKLEJ_TOKEN_API_KLUCZA_TURN",
+  "ttlSeconds": 86400
+}

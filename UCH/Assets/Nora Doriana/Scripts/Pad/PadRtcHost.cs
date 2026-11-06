@@ -23,6 +23,9 @@ public sealed class PadRtcHost : IDisposable
     private readonly PadHub _hub;
     private readonly Dictionary<string, RtcPadLink> _links = new Dictionary<string, RtcPadLink>();
 
+    // Przekaznik TURN dla telefonow z innych sieci (PadTurn) - pusty, gdy nie skonfigurowany.
+    public RTCIceServer[] TurnServers { get; set; } = Array.Empty<RTCIceServer>();
+
     public PadRtcHost(PadHub hub)
     {
         _hub = hub;
@@ -53,7 +56,7 @@ public sealed class PadRtcHost : IDisposable
 
         var configuration = new RTCConfiguration
         {
-            iceServers = new[] { new RTCIceServer { urls = new[] { StunServer } } }
+            iceServers = new[] { new RTCIceServer { urls = new[] { StunServer } } }.Concat(TurnServers).ToArray()
         };
         var link = new RtcPadLink(_hub, new RTCPeerConnection(ref configuration), PadSignaling.ShortId(playerId));
         _links[playerId] = link;

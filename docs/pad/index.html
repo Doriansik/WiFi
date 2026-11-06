@@ -36,6 +36,8 @@
   .who b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .who small { color: var(--muted); }
   .ping { display: flex; align-items: center; gap: 6px; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; }
+  .route { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+  .route:empty { display: none; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b7280; }
   .dot.good { background: #22c55e; } .dot.ok { background: #eab308; } .dot.bad { background: #ef4444; }
 
@@ -199,7 +201,7 @@
 <header>
   <div class="badge" id="badge">?</div>
   <div class="who"><b id="nameLabel">Gracz</b><small id="phaseLabel">Łączenie…</small></div>
-  <div class="ping"><span class="dot" id="dot"></span><span id="ping">— ms</span></div>
+  <div class="ping"><span class="route" id="route"></span><span class="dot" id="dot"></span><span id="ping">— ms</span></div>
 </header>
 
 <main>
@@ -516,6 +518,7 @@
     serverTimer = null;
     targetLobbyId = id;
     lobbyId = null;
+    turnServers = [];
     gameLabel = 'Gra: ' + (gameName || 'bez nazwy');
     show('connecting');
     run();
@@ -555,9 +558,17 @@
   }
 
   // Pole Lobby miesci 2048 znakow - przy wielu kandydatach wyrzucamy te, ktore w sieci lokalnej nie pomoga.
+  // Przekaznik (relay) zostaje najdluzej - bez niego telefon z innej sieci zwykle sie nie polaczy.
   function fitSdp(sdp, maxLength) {
     let lines = sdp.split('\r\n').filter(Boolean);
-    const droppable = [l => / tcp /i.test(l), l => / typ relay/.test(l), l => / typ srflx/.test(l)];
+    const isRelay = l => / typ relay/.test(l);
+    const hasRelayLine = lines.some(l => l.startsWith('a=candidate:') && isRelay(l));
+    const droppable = [
+      l => / tcp /i.test(l) && !isRelay(l),
+      l => hasRelayLine && / typ srflx/.test(l),
+      l => isRelay(l),
+      l => / typ srflx/.test(l)
+    ];
     for (const drop of droppable) {
       if (lines.join('\r\n').length + 2 <= maxLength) break;
       lines = lines.filter(l => !(l.startsWith('a=candidate:') && drop(l)));
@@ -577,6 +588,7 @@
   function closePeer() {
     const peer = pc;
     pc = ctl = inp = null;
+    $('route').textContent = '';
     if (peer) {
       peer.onconnectionstatechange = null;
       try { peer.close(); } catch (e) { /* juz zamkniete */ }
@@ -596,8 +608,10 @@
       tip: 'Telefon zbiera swoje adresy w sieci – to trwa najwyżej kilka sekund.' },
     { id: 'answer', label: 'Czekanie na odpowiedź komputera', limit: ANSWER_TIMEOUT_MS, slowAfter: 6000,
       tip: 'Komputer sprawdza nowe telefony co 1–3 s. Jeśli to trwa długo, sprawdź, czy gra na komputerze działa i ma internet.' },
-    { id: 'direct', label: 'Łączenie bezpośrednie z komputerem', limit: OPEN_TIMEOUT_MS, slowAfter: 4000,
-      tip: 'Telefon i komputer szukają drogi do siebie. Najpewniej działa w tej samej sieci Wi-Fi co komputer – w innej sieci może się nie udać.' },
+    { id: 'direct', label: 'Łączenie z komputerem', limit: OPEN_TIMEOUT_MS, slowAfter: 4000,
+      tip: () => routeRemote && !routeRelay
+        ? 'Komputer jest w innej sieci, a gra nie ma przekaźnika (TURN) – połączenie zdalne może się nie udać. Najpewniej działa to samo Wi-Fi co komputer.'
+        : 'Telefon i komputer szukają drogi do siebie – w innej sieci trwa to dłużej.' },
     { id: 'welcome', label: 'Odbieranie stanu gry', slowAfter: 3000,
       tip: 'Połączenie jest gotowe – komputer powinien zaraz przysłać stan gry.' }
   ];
@@ -695,7 +709,7 @@
 
     const active = STEPS[stepIndex];
     const isSlow = active && failedIndex < 0 && now - stepStartedAt > active.slowAfter;
-    $('connectingTip').textContent = isSlow ? active.tip : '';
+    $('connectingTip').textContent = isSlow ? (typeof active.tip === 'function' ? active.tip() : active.tip) : '';
     $('connectingMeta').textContent = [
       gameLabel,
       attemptNumber > 1 ? 'próba ' + attemptNumber : '',
@@ -712,11 +726,84 @@
     if (screenName === 'connecting' || $('overlay').classList.contains('show')) renderProgress();
   }, 250);
 
-  async function connectPeer() {
+  // ---------- Siec: lokalnie czy zdalnie ----------
+  // Host podaje w lobby serwery TURN (przekaznik), jesli ma je skonfigurowane - bez nich telefon z innej sieci
+  // laczy sie tylko wtedy, gdy routery po obu stronach przepuszcza bezposrednie polaczenie.
+
+  const REMOTE_NO_TURN_TEXT = 'Telefon jest w innej sieci niż komputer z grą, a gra nie ma serwera pośredniczącego (TURN). '
+    + 'Twoja sieć nie przepuszcza bezpośredniego połączenia przez internet. '
+    + 'Połącz telefon z tym samym Wi-Fi co komputer albo poproś hosta o włączenie TURN.';
+  const ROUTES = {
+    local: { label: 'Wi-Fi', text: 'połączono lokalnie – ta sama sieć co komputer' },
+    internet: { label: 'Internet', text: 'połączono zdalnie przez internet' },
+    relay: { label: 'Przekaźnik', text: 'połączono zdalnie przez przekaźnik (TURN)' }
+  };
+
+  let turnServers = [];  // z danych lobby; pusta lista = host nie ma TURN
+  let routeHint = '';
+  let routeRemote = false;
+  let routeRelay = false;
+
+  // a=candidate:<fundacja> <komponent> <protokol> <priorytet> <adres> <port> typ <typ> ...
+  const candidates = sdp => sdp.split(/\r?\n/).filter(l => l.startsWith('a=candidate:')).map(l => l.split(' '));
+  const publicAddresses = sdp => new Set(candidates(sdp).filter(f => f[7] === 'srflx').map(f => f[4]));
+  const hasRelay = sdp => candidates(sdp).some(f => f[7] === 'relay');
+  const isPrivateAddress = a => !!a && (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|f[cd][0-9a-f]{2}:|fe80:)/i.test(a) || a.endsWith('.local'));
+
+  // Ten sam adres publiczny = ta sama siec (ten sam router). null = nie wiadomo (STUN nie odpowiedzial).
+  function isSameNetwork(offerSdp, answerSdp) {
+    const mine = publicAddresses(offerSdp);
+    const host = publicAddresses(answerSdp);
+    if (!mine.size || !host.size) return null;
+    return [...mine].some(address => host.has(address));
+  }
+
+  async function loadTurnServers() {
+    try {
+      const lobby = await lobbyFetch('GET', `/${lobbyId}`);
+      const raw = lobby.data && lobby.data.ice && lobby.data.ice.value;
+      turnServers = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę. Wybierz inną grę z listy.');
+      // 429 albo chwilowy blad - zostaja serwery z poprzedniej proby
+    }
+  }
+
+  // Ktora droga faktycznie wybraly telefon i komputer - z statystyk polaczenia.
+  async function detectRoute(peer) {
+    try {
+      const stats = await peer.getStats();
+      let pair = null;
+      stats.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId); });
+      if (!pair) stats.forEach(r => { if (!pair && r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r; });
+      if (!pair) return null;
+      const local = stats.get(pair.localCandidateId) || {};
+      const remote = stats.get(pair.remoteCandidateId) || {};
+      if (local.candidateType === 'relay' || remote.candidateType === 'relay') return 'relay';
+      return isPrivateAddress(remote.address || remote.ip) ? 'local' : 'internet';
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function showRoute(route) {
+    const info = ROUTES[route];
+    $('route').textContent = info ? info.label : '';
+    $('route').title = info ? info.text : '';
+    if (info) setStepNote('welcome', info.text);
+  }
+
+  async function connectPeer(abandoned) {
     closePeer();
-    beginStep('offer', 'zbieranie adresów telefonu w sieci');
-    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    const describeIce = () => 'stan: ' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState);
+    beginStep('offer', 'pobieranie ustawień połączenia');
+    await loadTurnServers();
+    if (abandoned()) throw new Error(INTERRUPTED);  // gracz wybral inna gre - nie tworzymy juz polaczenia
+    routeHint = '';
+    routeRemote = false;
+    routeRelay = false;
+    setStepNote('offer', turnServers.length ? 'zbieranie adresów telefonu (z przekaźnikiem)' : 'zbieranie adresów telefonu w sieci');
+    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS.concat(turnServers) });
+    const describeIce = () => [routeHint, 'stan: ' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState)].filter(Boolean).join(' · ');
     peer.oniceconnectionstatechange = () => {
       if (pc === peer) setStepNote('direct', describeIce());
     };
@@ -764,12 +851,19 @@
     }
     if (!answer) throw new Error('komputer nie odpowiedział w ' + seconds(ANSWER_TIMEOUT_MS) + ' – czy gra na komputerze działa?');
 
+    const sameNetwork = isSameNetwork(peer.localDescription.sdp, answer);
+    routeRemote = sameNetwork === false;
+    routeRelay = hasRelay(peer.localDescription.sdp) || hasRelay(answer);
+    routeHint = sameNetwork === true ? 'ta sama sieć co komputer'
+      : routeRemote ? (routeRelay ? 'inna sieć – łączę przez internet (z przekaźnikiem)' : 'inna sieć – łączę przez internet')
+      : '';
     beginStep('direct', describeIce());
     await peer.setRemoteDescription({ type: 'answer', sdp: answer });
     try {
       await waitForOpen(control);
     } catch (e) {
-      throw new Error('brak bezpośredniego połączenia z komputerem (' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState) + ')');
+      if (routeRemote && !routeRelay) throw new FatalError('Nie da się połączyć zdalnie', REMOTE_NO_TURN_TEXT);
+      throw new Error('nie udało się połączyć z komputerem (' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState) + ')');
     }
 
     peer.onconnectionstatechange = () => {
@@ -816,9 +910,11 @@
           }
           lobbyId = joinedId;
         }
-        await connectPeer();
+        await connectPeer(abandoned);
         if (abandoned()) break;
         beginStep('welcome');  // konczy sie, gdy host przysle faze gry ("s|...")
+        const connectedPeer = pc;
+        detectRoute(connectedPeer).then(route => { if (pc === connectedPeer) showRoute(route); });
         wasConnected = true;
         $('overlay').classList.remove('show');
         break;

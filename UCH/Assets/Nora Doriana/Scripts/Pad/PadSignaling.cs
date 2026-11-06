@@ -43,14 +43,18 @@ public sealed class PadSignaling
         _maxPads = maxPads;
     }
 
-    public async Task StartAsync()
+    // turnServersJson: dane przekaznika TURN dla telefonow z innych sieci (albo null) - widoczne tylko dla graczy w lobby.
+    public async Task StartAsync(string turnServersJson)
     {
-        // Publiczne - telefon bez kodu QR (np. inne Wi-Fi) wybiera gre z listy po nazwie komputera.
-        var options = new CreateLobbyOptions
+        // Publiczne - telefon wybiera gre z listy po nazwie komputera.
+        var data = new Dictionary<string, DataObject> { { LobbyKind.Key, LobbyKind.Create(LobbyKind.Pad) } };
+
+        if (!string.IsNullOrEmpty(turnServersJson))
         {
-            IsPrivate = false,
-            Data = new Dictionary<string, DataObject> { { LobbyKind.Key, LobbyKind.Create(LobbyKind.Pad) } }
-        };
+            data[PadSdp.TurnKey] = new DataObject(DataObject.VisibilityOptions.Member, turnServersJson);
+        }
+
+        var options = new CreateLobbyOptions { IsPrivate = false, Data = data };
         _lobby = await LobbyService.Instance.CreateLobbyAsync(GetLobbyName(), _maxPads + 1, options);
         _nextHeartbeatTime = Time.unscaledTime + FirstHeartbeatDelaySeconds;
 
