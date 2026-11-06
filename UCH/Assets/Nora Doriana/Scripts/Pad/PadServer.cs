@@ -86,6 +86,9 @@ public class PadServer : MonoBehaviour
     private async void Awake()
     {
         Instance = this;
+        // Host musi dzialac, gdy jego okno nie jest aktywne (gracz trzyma telefon, w edytorze klika gdzie indziej) -
+        // inaczej Unity wstrzymuje petle gry i telefony stoja na "Czekanie na odpowiedz komputera".
+        Application.runInBackground = true;
         _hub = new PadHub(MaxPads);
         _rtcHost = new PadRtcHost(_hub);
         _signaling = new PadSignaling(MaxPads);

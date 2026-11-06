@@ -245,6 +245,11 @@ public sealed class PadHub
                 {
                     TryAttach(link, parts[1], parts[2], now);
                 }
+                else if (session != null)
+                {
+                    // Telefon powtarza powitanie, bo nie dostal stanu gry - wysylamy go jeszcze raz.
+                    _events.Enqueue(new PadEvent { Type = PadEventType.Connected, Session = session });
+                }
 
                 return;
             case "p":

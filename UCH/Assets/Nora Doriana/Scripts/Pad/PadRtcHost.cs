@@ -195,6 +195,7 @@ public sealed class PadRtcHost : IDisposable
         private readonly string _logName;
         private RTCDataChannel _controlChannel;
         private RTCDataChannel _inputChannel;
+        private bool _hasLoggedFirstMessage;
 
         public RTCPeerConnection PeerConnection { get; }
         public bool IsClosed { get; private set; }
@@ -254,12 +255,25 @@ public sealed class PadRtcHost : IDisposable
                 return;
             }
 
+            Debug.Log($"Pady: {_logName} kanal '{channel.Label}' otwarty");
+
             channel.OnMessage = bytes =>
             {
-                if (!IsClosed)
+                if (IsClosed)
                 {
-                    _hub.HandleMessage(this, Encoding.UTF8.GetString(bytes), Time.unscaledTimeAsDouble);
+                    return;
                 }
+
+                string message = Encoding.UTF8.GetString(bytes);
+
+                // Diagnostyka: pierwsza wiadomosc kanalem sterowania to powinno byc powitanie "h|...".
+                if (channel == _controlChannel && !_hasLoggedFirstMessage)
+                {
+                    _hasLoggedFirstMessage = true;
+                    Debug.Log($"Pady: {_logName} pierwsza wiadomosc od telefonu: {message.Split('|')[0]}");
+                }
+
+                _hub.HandleMessage(this, message, Time.unscaledTimeAsDouble);
             };
         }
 

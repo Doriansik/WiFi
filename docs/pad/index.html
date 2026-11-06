@@ -743,6 +743,7 @@
   let routeHint = '';
   let routeRemote = false;
   let routeRelay = false;
+  let welcomeRoute = '';  // opis drogi pokazywany w ostatnim kroku
 
   // a=candidate:<fundacja> <komponent> <protokol> <priorytet> <adres> <port> typ <typ> ...
   const candidates = sdp => sdp.split(/\r?\n/).filter(l => l.startsWith('a=candidate:')).map(l => l.split(' '));
@@ -790,6 +791,7 @@
     const info = ROUTES[route];
     $('route').textContent = info ? info.label : '';
     $('route').title = info ? info.text : '';
+    welcomeRoute = info ? info.text : '';
     if (info) setStepNote('welcome', info.text);
   }
 
@@ -875,11 +877,43 @@
     sequence = 0;
     jumpCount = 0;
     mask = 0;
+    sendHello(control);
+    sendInput();
+  }
+
+  function sendHello(control) {
     control.send(`h|${auth.userId}|${name}`);
     control.send('r|' + (ready ? 1 : 0));
     const savedSkin = store.get('padSkin');
     if (savedSkin) control.send('k|' + savedSkin);  // host odpowie, czy ta postac jest wolna
-    sendInput();
+  }
+
+  // Ostatni krok: czekamy na stan gry od komputera. Gdy nie przychodzi, powtarzamy powitanie i pokazujemy,
+  // czy komputer w ogole odpowiada (ping) - wtedy wiadomo, czy wina lezy po stronie polaczenia, czy gry.
+  const WELCOME_RETRY_MS = 2000;
+  const WELCOME_GIVE_UP_MS = 15000;
+
+  function watchWelcome(peer, control) {
+    const startedAt = performance.now();
+    let helloCount = 1;
+    const timer = setInterval(() => {
+      const waiting = pc === peer && STEPS[stepIndex] && STEPS[stepIndex].id === 'welcome' && failedIndex < 0;
+      if (!waiting) { clearInterval(timer); return; }
+      const now = performance.now();
+      if (now - startedAt > WELCOME_GIVE_UP_MS) {
+        clearInterval(timer);
+        console.warn('Pad: komputer nie przyslal stanu gry - lacze od nowa');
+        reconnect();
+        return;
+      }
+      const hostAnswers = now - lastMessageAt < 1500;
+      if (control.readyState === 'open') { sendHello(control); helloCount++; }
+      setStepNote('welcome', [
+        welcomeRoute,
+        `powitanie wysłane ${helloCount}×`,
+        hostAnswers ? 'komputer odpowiada na ping' : 'komputer nie odpowiada – czy gra na komputerze nie jest zatrzymana?'
+      ].filter(Boolean).join(' · '));
+    }, WELCOME_RETRY_MS);
   }
 
   async function run() {
@@ -914,7 +948,9 @@
         if (abandoned()) break;
         beginStep('welcome');  // konczy sie, gdy host przysle faze gry ("s|...")
         const connectedPeer = pc;
+        welcomeRoute = '';
         detectRoute(connectedPeer).then(route => { if (pc === connectedPeer) showRoute(route); });
+        watchWelcome(connectedPeer, ctl);
         wasConnected = true;
         $('overlay').classList.remove('show');
         break;
