@@ -9,10 +9,15 @@ public class PadJoinUI : MonoBehaviour
     private const int QuietZoneModules = 4;  // bialy margines wymagany przez skanery
     private const string PreparingText = "Przygotowanie...";
     private const string UnavailableText = "Pady wymagaja internetu";
+    // Bez przekaznika TURN telefon z innej sieci zwykle sie nie polaczy - mowimy to wprost przy kodzie QR.
+    private const string AnyNetworkText = "Dowolna siec: Wi-Fi lub dane komorkowe";
+    private const string LocalOnlyText = "Tylko ta sama siec Wi-Fi (brak klucza TURN)";
+    private const float HintMinFontSize = 14f;
 
     [SerializeField] private GameObject _panel;
     [SerializeField] private RawImage _qrImage;
     [SerializeField] private TMP_Text _urlText;
+    [SerializeField] private TMP_Text _networkHintText;
 
     private Texture2D _qrTexture;
 
@@ -48,7 +53,22 @@ public class PadJoinUI : MonoBehaviour
         _qrImage.texture = _qrTexture;
         _qrImage.enabled = true;
         _urlText.text = padServer.JoinUrl;
+        ShowNetworkHint(padServer.HasTurn ? AnyNetworkText : LocalOnlyText);
         enabled = false;
+    }
+
+    private void ShowNetworkHint(string text)
+    {
+        if (_networkHintText == null)
+        {
+            return;
+        }
+
+        // Dluzszy napis zmniejsza sie zamiast wychodzic poza pole pod kodem.
+        _networkHintText.fontSizeMax = _networkHintText.fontSize;
+        _networkHintText.fontSizeMin = Mathf.Min(HintMinFontSize, _networkHintText.fontSize);
+        _networkHintText.enableAutoSizing = true;
+        _networkHintText.text = text;
     }
 
     private void OnDestroy()

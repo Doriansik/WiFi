@@ -53,6 +53,7 @@ public class PadServer : MonoBehaviour
 
     public string JoinUrl { get; private set; }
     public bool IsUnavailable { get; private set; }
+    public bool HasTurn { get; private set; }  // jest przekaznik - telefony moga dolaczac z innych sieci
 
     private readonly List<PadPlayer> _padPlayers = new List<PadPlayer>();
     private PadHub _hub;
@@ -96,6 +97,7 @@ public class PadServer : MonoBehaviour
             // Najpierw TURN - jego dane trafiaja do lobby od razu przy zakladaniu. Bez TURN pady dzialaja tylko lokalnie.
             string turnServersJson = await PadTurn.FetchIceServersJsonAsync();
             _rtcHost.TurnServers = PadTurn.ToRtcIceServers(turnServersJson);
+            HasTurn = _rtcHost.TurnServers.Length > 0;
             await _signaling.StartAsync(turnServersJson);
             // QR tylko otwiera strone pada - gracz sam wybiera te gre z listy. QR pojawia sie dopiero, gdy lobby istnieje,
             // zeby gra byla juz na liscie, kiedy ktos go zeskanuje.
