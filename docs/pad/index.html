@@ -303,14 +303,19 @@
   const MAX_LOBBY_VALUE = 2048;
   const GATHER_TIMEOUT_MS = 6000;     // gorna granica; zwykle konczymy chwile po adresie publicznym (srflx)
   const GATHER_SETTLE_MS = 400;       // po pierwszym adresie publicznym czekamy jeszcze chwile na pozostale
-  const REMOTE_ATTEMPTS = 3;          // tyle prob z innej sieci bez TURN, zanim powiemy, ze sie nie da
+  const REMOTE_HINT_AFTER = 3;        // po tylu nieudanych probach z innej sieci podpowiadamy to samo Wi-Fi (ale probujemy dalej)
   const POLL_INTERVAL_MS = 1100;      // limit Lobby: odczyt max raz na sekunde
   const ANSWER_TIMEOUT_MS = 15000;
   const SERVER_REFRESH_MS = 4000;     // lista gier odswieza sie sama, dopoki jest na ekranie
   const PAD_LOBBY_KIND = 'pad';       // LobbyKind.Pad w MatchmakingManager.cs (indeksowane pole S1)
   const DEFAULT_THEME = '#14161c';
   const FULL_TEXT = 'Wszystkie pady w tej grze są zajęte. Wybierz inną grę albo spróbuj, gdy ktoś wyjdzie.';
+  // Otwarcie kanalu: w tej samej sieci trwa ulamek sekundy. Przez internet (CGNAT operatora komorkowego) droga
+  // znajduje sie wolniej - a gdy ICE juz ja znalazl, dajemy czas na szyfrowanie i kanaly, zamiast porzucac gotowe polaczenie.
   const OPEN_TIMEOUT_MS = 10000;
+  const REMOTE_OPEN_TIMEOUT_MS = 20000;
+  const OPEN_AFTER_ICE_MS = 10000;
+  let openLimitMs = OPEN_TIMEOUT_MS;  // limit biezacego kroku "Łączenie z komputerem" (pokazywany graczowi)
   const INPUT_RESEND_MS = 100;        // kanal wejscia jest bez retransmisji - stan powtarzamy, zgubiony pakiet nie zostawi wcisnietego przycisku
   const PING_INTERVAL_MS = 500;       // czeste pingi trzymaja Wi-Fi telefonu w trybie aktywnym (mniejsze skoki opoznienia)
   const DEAD_AFTER_MS = 3000;
@@ -589,12 +594,36 @@
     return lines.join('\r\n') + '\r\n';
   }
 
-  function waitForOpen(channel) {
+  // Limit liczy sie od nowa, gdy ICE znajdzie droge - zostaje wtedy tylko szyfrowanie i otwarcie kanalow.
+  // ICE "failed" konczy od razu: nowa proba (nowy port u operatora) ma wieksza szanse niz dalsze czekanie.
+  function waitForOpen(channel, peer, timeoutMs) {
     return new Promise((resolve, reject) => {
       if (channel.readyState === 'open') return resolve();
-      const timer = setTimeout(() => reject(new Error('timeout open')), OPEN_TIMEOUT_MS);
-      channel.addEventListener('open', () => { clearTimeout(timer); resolve(); });
-      channel.addEventListener('close', () => { clearTimeout(timer); reject(new Error('closed')); });
+      let timer = null;
+      let done = false;
+      let iceFound = false;
+      const finish = error => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        peer.removeEventListener('iceconnectionstatechange', onIce);
+        if (error) reject(error); else resolve();
+      };
+      const arm = ms => {
+        clearTimeout(timer);
+        timer = setTimeout(() => finish(new Error('timeout open')), ms);
+        openLimitMs = performance.now() - stepStartedAt + ms;
+      };
+      const onIce = () => {
+        const state = peer.iceConnectionState;
+        if (state === 'failed') finish(new Error('ice failed'));
+        else if ((state === 'connected' || state === 'completed') && !iceFound) { iceFound = true; arm(OPEN_AFTER_ICE_MS); }
+      };
+      arm(timeoutMs);
+      peer.addEventListener('iceconnectionstatechange', onIce);
+      channel.addEventListener('open', () => finish());
+      channel.addEventListener('close', () => finish(new Error('closed')));
+      onIce();
     });
   }
 
@@ -621,9 +650,9 @@
       tip: 'Telefon zbiera swoje adresy w sieci – to trwa najwyżej kilka sekund.' },
     { id: 'answer', label: 'Czekanie na odpowiedź komputera', limit: ANSWER_TIMEOUT_MS, slowAfter: 6000,
       tip: 'Komputer sprawdza nowe telefony co 1–3 s. Jeśli to trwa długo, sprawdź, czy gra na komputerze działa i ma internet.' },
-    { id: 'direct', label: 'Łączenie z komputerem', limit: OPEN_TIMEOUT_MS, slowAfter: 4000,
+    { id: 'direct', label: 'Łączenie z komputerem', get limit() { return openLimitMs; }, slowAfter: 4000,
       tip: () => routeRemote && !routeRelay
-        ? 'Komputer jest w innej sieci, a gra nie ma przekaźnika (TURN) – połączenie zdalne może się nie udać. Najpewniej działa to samo Wi-Fi co komputer.'
+        ? 'Komputer jest w innej sieci – droga przez internet szuka się dłużej i nie zawsze wychodzi za pierwszym razem. Strona próbuje sama, aż się uda. Najpewniej działa to samo Wi-Fi co komputer.'
         : 'Telefon i komputer szukają drogi do siebie – w innej sieci trwa to dłużej.' },
     { id: 'welcome', label: 'Odbieranie stanu gry', slowAfter: 3000,
       tip: 'Połączenie jest gotowe – komputer powinien zaraz przysłać stan gry.' }
@@ -743,9 +772,6 @@
   // Host podaje w lobby serwery TURN (przekaznik), jesli ma je skonfigurowane - bez nich telefon z innej sieci
   // laczy sie tylko wtedy, gdy routery po obu stronach przepuszcza bezposrednie polaczenie.
 
-  const REMOTE_NO_TURN_TEXT = 'Telefon jest w innej sieci niż komputer z grą, a gra nie ma serwera pośredniczącego (TURN). '
-    + 'Twoja sieć nie przepuszcza bezpośredniego połączenia przez internet. '
-    + 'Połącz telefon z tym samym Wi-Fi co komputer albo poproś hosta o włączenie TURN.';
   const ROUTES = {
     local: { label: 'Wi-Fi', text: 'połączono lokalnie – ta sama sieć co komputer' },
     internet: { label: 'Internet', text: 'połączono zdalnie przez internet' },
@@ -873,18 +899,21 @@
     routeHint = sameNetwork === true ? 'ta sama sieć co komputer'
       : routeRemote ? (routeRelay ? 'inna sieć – łączę przez internet (z przekaźnikiem)' : 'inna sieć – łączę przez internet')
       : '';
+    openLimitMs = sameNetwork === true ? OPEN_TIMEOUT_MS : REMOTE_OPEN_TIMEOUT_MS;
     beginStep('direct', describeIce());
     await peer.setRemoteDescription({ type: 'answer', sdp: answer });
     try {
-      await waitForOpen(control);
+      await waitForOpen(control, peer, openLimitMs);
     } catch (e) {
-      // Bez TURN polaczenie z innej sieci czasem wychodzi dopiero przy kolejnej probie - poddajemy sie po kilku.
-      if (routeRemote && !routeRelay && ++remoteFailures >= REMOTE_ATTEMPTS) {
-        remoteFailures = 0;
-        throw new FatalError('Nie da się połączyć zdalnie', REMOTE_NO_TURN_TEXT);
+      const ice = ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState;
+      // Bez TURN droga przez internet zalezy od tego, jaki port da operator - kazda proba to nowy port i nowa szansa,
+      // wiec nie poddajemy sie. Po kilku nieudanych tylko podpowiadamy pewniejsza droge.
+      if (routeRemote && !routeRelay) {
+        remoteFailures++;
+        const hint = remoteFailures >= REMOTE_HINT_AFTER ? ' – najpewniej działa to samo Wi-Fi co komputer' : '';
+        throw new Error(`inna sieć – droga przez internet nie wyszła (${ice}), szukam nowej, próba ${remoteFailures}${hint}`);
       }
-      if (routeRemote && !routeRelay) throw new Error(`inna sieć, bez przekaźnika – próbuję jeszcze raz (${remoteFailures}/${REMOTE_ATTEMPTS})`);
-      throw new Error('nie udało się połączyć z komputerem (' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState) + ')');
+      throw new Error('nie udało się połączyć z komputerem (' + ice + ')');
     }
 
     peer.onconnectionstatechange = () => {

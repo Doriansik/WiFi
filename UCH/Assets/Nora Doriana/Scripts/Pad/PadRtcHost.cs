@@ -16,7 +16,9 @@ public sealed class PadRtcHost : IDisposable
 {
     private const float IceGatheringTimeoutSeconds = 3f;
     private const float MdnsTimeoutSeconds = 2f;
-    private const string StunServer = "stun:stun.l.google.com:19302";  // zapas, gdy nazwa .local telefonu sie nie rozwiaze
+    // Adres publiczny dla telefonow spoza sieci. Dwa serwery: jeden moze nie odpowiedziec, a dwa rozne porty od nich
+    // znacza, ze router komputera zmienia port dla kazdego adresata (wtedy polaczenie zdalne bywa loteria - widac w logu).
+    private static readonly string[] StunServers = { "stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478" };
     private const string ControlChannelLabel = "ctl";
     private const string InputChannelLabel = "in";
 
@@ -56,7 +58,7 @@ public sealed class PadRtcHost : IDisposable
 
         var configuration = new RTCConfiguration
         {
-            iceServers = new[] { new RTCIceServer { urls = new[] { StunServer } } }.Concat(TurnServers).ToArray()
+            iceServers = new[] { new RTCIceServer { urls = StunServers } }.Concat(TurnServers).ToArray()
         };
         var link = new RtcPadLink(_hub, new RTCPeerConnection(ref configuration), PadSignaling.ShortId(playerId));
         _links[playerId] = link;
@@ -106,20 +108,35 @@ public sealed class PadRtcHost : IDisposable
         }
 
         string answerSdp = peerConnection.LocalDescription.sdp;
-        Debug.Log($"Pady: odpowiedz WebRTC dla {PadSignaling.ShortId(playerId)}, kandydaci hosta: {DescribeCandidates(answerSdp)}, telefonu: {DescribeCandidates(resolvedOffer)}");
+        Debug.Log($"Pady: odpowiedz WebRTC dla {PadSignaling.ShortId(playerId)} {link.Elapsed}, kandydaci hosta: {DescribeCandidates(answerSdp)}, telefonu: {DescribeCandidates(resolvedOffer)}");
         onAnswer(answerSdp);
     }
 
     // Do logu: "host 192.168.1.7:51923, srflx 46.1.2.3:62927" - od razu widac, czy telefon jest w tej samej sieci.
+    // Brak srflx albo kilka srflx z tym samym adresem i roznymi portami - tam lezy przyczyna nieudanych polaczen zdalnych.
     private static string DescribeCandidates(string sdp)
     {
-        IEnumerable<string> candidates = sdp.Split('\n')
+        List<string[]> candidates = sdp.Split('\n')
             .Where(line => line.StartsWith("a=candidate:"))
             .Select(line => line.Trim().Split(' '))
             .Where(fields => fields.Length >= 8)
-            .Select(fields => $"{fields[7]} {fields[4]}:{fields[5]}");
-        string result = string.Join(", ", candidates);
-        return result.Length > 0 ? result : "brak";
+            .ToList();
+        string result = string.Join(", ", candidates.Select(fields => $"{fields[7]} {fields[4]}:{fields[5]}"));
+
+        if (result.Length == 0)
+        {
+            return "brak";
+        }
+
+        List<string[]> reflexive = candidates.Where(fields => fields[7] == "srflx").ToList();
+
+        if (reflexive.Count == 0)
+        {
+            return result + " [brak adresu publicznego - spoza sieci nie polaczy sie]";
+        }
+
+        bool changesPort = reflexive.GroupBy(fields => fields[4]).Any(group => group.Select(fields => fields[5]).Distinct().Count() > 1);
+        return changesPort ? result + " [NAT zmienia port dla kazdego adresata - polaczenie zdalne niepewne]" : result;
     }
 
     public void Forget(string playerId)
@@ -198,9 +215,12 @@ public sealed class PadRtcHost : IDisposable
         private bool _hasLoggedFirstMessage;
         private readonly Queue<string> _pendingControl = new Queue<string>();
         private const int MaxPendingMessages = 64;
+        // Czas od oferty w logach - widac, czy droga przez internet znalazla sie po 1 s czy po 15 s.
+        private readonly System.Diagnostics.Stopwatch _sinceOffer = System.Diagnostics.Stopwatch.StartNew();
 
         public RTCPeerConnection PeerConnection { get; }
         public bool IsClosed { get; private set; }
+        public string Elapsed => $"(+{_sinceOffer.Elapsed.TotalSeconds:0.0} s)";
 
         public RtcPadLink(PadHub hub, RTCPeerConnection peerConnection, string logName)
         {
@@ -209,7 +229,7 @@ public sealed class PadRtcHost : IDisposable
             PeerConnection = peerConnection;
             PeerConnection.OnDataChannel = HandleDataChannel;
             PeerConnection.OnConnectionStateChange = HandleConnectionStateChange;
-            PeerConnection.OnIceConnectionChange = state => Debug.Log($"Pady: {_logName} ICE: {state}");
+            PeerConnection.OnIceConnectionChange = state => Debug.Log($"Pady: {_logName} ICE: {state} {Elapsed}");
         }
 
         // Tekst zawsze jako bajty UTF-8 - Send(string) w Unity WebRTC wysyla ANSI.
@@ -286,7 +306,7 @@ public sealed class PadRtcHost : IDisposable
                 return;
             }
 
-            Debug.Log($"Pady: {_logName} kanal '{channel.Label}' otwarty");
+            Debug.Log($"Pady: {_logName} kanal '{channel.Label}' otwarty {Elapsed}");
 
             channel.OnMessage = bytes =>
             {
@@ -311,7 +331,7 @@ public sealed class PadRtcHost : IDisposable
 
         private void HandleConnectionStateChange(RTCPeerConnectionState state)
         {
-            Debug.Log($"Pady: {_logName} polaczenie: {state}");
+            Debug.Log($"Pady: {_logName} polaczenie: {state} {Elapsed}");
 
             if (state == RTCPeerConnectionState.Failed || state == RTCPeerConnectionState.Closed)
             {

@@ -11,7 +11,7 @@ public class PadJoinUI : MonoBehaviour
     private const string UnavailableText = "Pady wymagaja internetu";
     // Bez przekaznika TURN telefon z innej sieci zwykle sie nie polaczy - mowimy to wprost przy kodzie QR.
     private const string AnyNetworkText = "Dowolna siec: Wi-Fi lub dane komorkowe";
-    private const string LocalOnlyText = "Tylko ta sama siec Wi-Fi (brak klucza TURN)";
+    private const string LocalOnlyText = "Najpewniej ta sama siec Wi-Fi (dane komorkowe: nie zawsze)";
     private const float HintMinFontSize = 14f;
 
     [SerializeField] private GameObject _panel;
