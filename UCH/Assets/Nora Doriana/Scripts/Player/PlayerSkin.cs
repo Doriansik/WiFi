@@ -21,6 +21,7 @@ public class SkinDefinition
 public class PlayerSkin : NetworkBehaviour
 {
     private const float WalkSpeedThreshold = 0.1f;
+    private const float TurnSpeedThreshold = 0.5f;
     // Pozycja zmienia sie co krok fizyki, nie co klatke - bez zapasu animacja migalaby na pierwsza klatke.
     private const float WalkStopDelaySeconds = 0.15f;
 
@@ -149,9 +150,18 @@ public class PlayerSkin : NetworkBehaviour
         // Ruch liczony z pozycji, nie z fizyki - dziala tak samo na hoscie i u klientow (NetworkTransform).
         float x = transform.position.x;
 
-        if (Time.deltaTime > 0f && Mathf.Abs(x - _previousX) / Time.deltaTime > WalkSpeedThreshold)
+        float speedX = Time.deltaTime > 0f ? (x - _previousX) / Time.deltaTime : 0f;
+
+        if (Mathf.Abs(speedX) > WalkSpeedThreshold)
         {
             _lastMoveTime = Time.time;
+        }
+
+        // Postac patrzy tam, gdzie idzie; stojac zostaje zwrocona jak ostatnio. Grafiki patrza w prawo.
+        // Wyzszy prog niz dla animacji - drobne drgania pozycji (wygladzanie u klientow) nie obracaja postaci.
+        if (Mathf.Abs(speedX) > TurnSpeedThreshold)
+        {
+            _spriteRenderer.flipX = speedX < 0f;
         }
 
         _previousX = x;
