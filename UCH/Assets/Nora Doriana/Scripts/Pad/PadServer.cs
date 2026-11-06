@@ -94,7 +94,9 @@ public class PadServer : MonoBehaviour
         try
         {
             await _signaling.StartAsync();
-            JoinUrl = $"{PadPageUrl}?c={_signaling.LobbyCode}";
+            // QR tylko otwiera strone pada - gracz sam wybiera te gre z listy. QR pojawia sie dopiero, gdy lobby istnieje,
+            // zeby gra byla juz na liscie, kiedy ktos go zeskanuje.
+            JoinUrl = PadPageUrl;
             Debug.Log($"Pady: telefony dolaczaja pod {JoinUrl}");
         }
         catch (Exception exception)

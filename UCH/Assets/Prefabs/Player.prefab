@@ -323,40 +323,61 @@ MonoBehaviour:
   _walkFramesPerSecond: 8
   _skins:
   - Id: sausage
-    DisplayName: Parowka
+    DisplayName: Parówa Dorian
     Frames:
     - {fileID: -3047271936483254964, guid: e06eb2c21de1b4146afcddd7b27818c0, type: 3}
     - {fileID: -8344876054891438937, guid: e06eb2c21de1b4146afcddd7b27818c0, type: 3}
     - {fileID: -2401338151647740071, guid: e06eb2c21de1b4146afcddd7b27818c0, type: 3}
     - {fileID: 8988838739561739973, guid: e06eb2c21de1b4146afcddd7b27818c0, type: 3}
   - Id: avocado
-    DisplayName: Awokado
+    DisplayName: Awokado Kornel
     Frames:
     - {fileID: 8275227269676032908, guid: 1e28ec6bed1ac64459555fcefe253c47, type: 3}
     - {fileID: -4565074268561055903, guid: 1e28ec6bed1ac64459555fcefe253c47, type: 3}
     - {fileID: -7388713735822873281, guid: 1e28ec6bed1ac64459555fcefe253c47, type: 3}
     - {fileID: -2129034349911617497, guid: 1e28ec6bed1ac64459555fcefe253c47, type: 3}
   - Id: coffee
-    DisplayName: Kawa
+    DisplayName: Kawa Karolina
     Frames:
     - {fileID: 8447348015885639591, guid: 81477b358accde44ba12f7ce9c99f6ab, type: 3}
     - {fileID: -7719357975393726306, guid: 81477b358accde44ba12f7ce9c99f6ab, type: 3}
     - {fileID: -430071176115755674, guid: 81477b358accde44ba12f7ce9c99f6ab, type: 3}
     - {fileID: -5691783707714483392, guid: 81477b358accde44ba12f7ce9c99f6ab, type: 3}
   - Id: milk
-    DisplayName: Mleko
+    DisplayName: Mleko Agnieszka
     Frames:
     - {fileID: -1647094994171134731, guid: b0f5f490490035041b5076b2e5a5ceaf, type: 3}
     - {fileID: -2756807004729456894, guid: b0f5f490490035041b5076b2e5a5ceaf, type: 3}
     - {fileID: -5978395767726601682, guid: b0f5f490490035041b5076b2e5a5ceaf, type: 3}
     - {fileID: 316866265244745889, guid: b0f5f490490035041b5076b2e5a5ceaf, type: 3}
   - Id: potato
-    DisplayName: Ziemniak
+    DisplayName: Pyra Michał
     Frames:
     - {fileID: 6081866094512540806, guid: 1a11a88408461504bab7ff8c46eac833, type: 3}
     - {fileID: -6240966308200696736, guid: 1a11a88408461504bab7ff8c46eac833, type: 3}
     - {fileID: -5093121867276853151, guid: 1a11a88408461504bab7ff8c46eac833, type: 3}
     - {fileID: 8079943172379147566, guid: 1a11a88408461504bab7ff8c46eac833, type: 3}
+  - Id: burger
+    DisplayName: Burger Julia
+    Frames:
+    - {fileID: 8353252121437026804, guid: 110dcb33e7297db48a8d52c9edc2ac80, type: 3}
+    - {fileID: -1033346171148683032, guid: 110dcb33e7297db48a8d52c9edc2ac80, type: 3}
+    - {fileID: -789792061835939079, guid: 110dcb33e7297db48a8d52c9edc2ac80, type: 3}
+    - {fileID: 6680647969768860246, guid: 110dcb33e7297db48a8d52c9edc2ac80, type: 3}
+  - Id: energy
+    DisplayName: Energetyk Niko
+    Frames:
+    - {fileID: -5942340846199070421, guid: ab5495312256c7f4fa32fc95dea1d991, type: 3}
+    - {fileID: -7193791072017707971, guid: ab5495312256c7f4fa32fc95dea1d991, type: 3}
+    - {fileID: -8871076480792740153, guid: ab5495312256c7f4fa32fc95dea1d991, type: 3}
+    - {fileID: -8594488102793612562, guid: ab5495312256c7f4fa32fc95dea1d991, type: 3}
+  - Id: toast
+    DisplayName: Tost Teo
+    Frames:
+    - {fileID: 7363914268275422234, guid: 585185aff303b4244a7459b7cadc28be, type: 3}
+    - {fileID: 1098075495147292553, guid: 585185aff303b4244a7459b7cadc28be, type: 3}
+    - {fileID: 9082683464990010052, guid: 585185aff303b4244a7459b7cadc28be, type: 3}
+    - {fileID: -3876613635687105681, guid: 585185aff303b4244a7459b7cadc28be, type: 3}
 --- !u!114 &7720450083392041730
 MonoBehaviour:
   m_ObjectHideFlags: 0

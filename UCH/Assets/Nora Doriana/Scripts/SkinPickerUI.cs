@@ -12,9 +12,12 @@ public class SkinPickerUI : MonoBehaviour
     private const string TakenText = "zajeta";
     private const float Padding = 12f;
     private const float TitleHeight = 56f;
-    private const float RowHeight = 104f;
-    private const float RowSpacing = 8f;
-    private const float IconSize = 88f;
+    // Panel rosnie z liczba postaci - 8 wierszy po 84 px miesci sie w 1080 px z zapasem.
+    private const float RowHeight = 84f;
+    private const float RowSpacing = 6f;
+    private const float IconSize = 72f;
+    private const float LabelMaxFontSize = 26f;
+    private const float LabelMinFontSize = 16f;  // dluzsze imie ("Energetyk Niko") zmniejsza sie zamiast wychodzic poza wiersz
 
     private static readonly Color RowColor = new Color(1f, 1f, 1f, 0.08f);
     private static readonly Color SelectedRowColor = new Color(1f, 1f, 1f, 0.32f);
@@ -137,7 +140,10 @@ public class SkinPickerUI : MonoBehaviour
             row.Icon.preserveAspect = true;
             row.Icon.raycastTarget = false;
 
-            TextMeshProUGUI label = CreateText("Label", rowRect, 30f, TextAlignmentOptions.MidlineLeft);
+            TextMeshProUGUI label = CreateText("Label", rowRect, LabelMaxFontSize, TextAlignmentOptions.MidlineLeft);
+            label.enableAutoSizing = true;
+            label.fontSizeMin = LabelMinFontSize;
+            label.fontSizeMax = LabelMaxFontSize;
             label.rectTransform.anchorMin = Vector2.zero;
             label.rectTransform.anchorMax = Vector2.one;
             label.rectTransform.offsetMin = new Vector2(Padding * 2f + IconSize, 0f);

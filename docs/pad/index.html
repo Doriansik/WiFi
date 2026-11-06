@@ -64,7 +64,8 @@
   #ready.on { background: var(--pc); color: #fff; }
 
   /* Arkusze postaci: 4 klatki 32 px obok siebie, te same pliki co w grze */
-  .skins { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; --s: 48px; }
+  .skins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; --s: 48px; }  /* 8 postaci = 2 rzedy po 4 */
+  .skin .name { text-align: center; line-height: 1.15; padding: 0 3px; overflow-wrap: anywhere; }
   @media (min-width: 400px) { .skins { --s: 64px; } }
   .skin {
     display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 5px; min-width: 0;
@@ -155,7 +156,22 @@
   .warn { color: #fbbf24; }
   .hint:empty { display: none; }
 
-  /* Lista gier - dla telefonu bez kodu QR (np. inne Wi-Fi) */
+  /* Ekran startowy: kod QR otwiera tylko strone, gracz sam naciska GRAJ i wybiera gre */
+  #home { justify-content: safe center; overflow-y: auto; gap: 18px; }
+  .cast { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 360px; --s: 40px; }
+  .cast span {
+    width: var(--s); height: var(--s); background-repeat: no-repeat; background-size: calc(var(--s) * 4) var(--s);
+    image-rendering: pixelated; image-rendering: crisp-edges; animation: walk 0.5s steps(4) infinite;
+  }
+  #home h1 { font-size: 30px; }
+  #play {
+    width: min(360px, 100%); padding: 22px; border-radius: 18px; border: none; background: #22c55e; color: #0b1a10;
+    font: inherit; font-size: 28px; font-weight: 800; letter-spacing: 0.08em;
+  }
+  #play:active { transform: scale(0.97); }
+  .row { display: flex; gap: 10px; justify-content: center; }
+
+  /* Lista gier */
   #servers { flex-direction: column; align-items: center; gap: 14px; overflow-y: auto; text-align: center; }
   #servers h1 { margin: 8px 0 0; font-size: 24px; }
   .serverList { width: min(420px, 100%); display: flex; flex-direction: column; gap: 8px; }
@@ -187,7 +203,15 @@
 </header>
 
 <main>
-  <section id="connecting" class="center active">
+  <section id="home" class="center active">
+    <div class="cast" id="cast"></div>
+    <h1>Imprezowa Gra</h1>
+    <p>Telefon jest twoim padem – sama gra jest na ekranie komputera.</p>
+    <button id="play" type="button">GRAJ</button>
+    <p class="hint">Na komputerze uruchom grę i wybierz Host – wtedy pojawi się na liście.</p>
+  </section>
+
+  <section id="connecting" class="center">
     <div class="spinner"></div>
     <h1>Łączenie z grą…</h1>
     <p class="hint" id="connectingMeta"></p>
@@ -208,8 +232,11 @@
     <h1>Wybierz grę</h1>
     <p class="hint" id="serversHint">Szukam gier…</p>
     <div class="serverList" id="serverList"></div>
-    <button class="secondary" id="refreshServers" type="button">Odśwież</button>
-    <p class="hint">Gra nazywa się tak jak komputer, na którym działa. Kod QR z ekranu prowadzi od razu do właściwej gry.</p>
+    <div class="row">
+      <button class="secondary" id="toHome" type="button">Wstecz</button>
+      <button class="secondary" id="refreshServers" type="button">Odśwież</button>
+    </div>
+    <p class="hint">Gra nazywa się tak jak komputer, na którym działa.</p>
   </section>
 
   <section id="lobby">
@@ -277,6 +304,7 @@
   const SERVER_REFRESH_MS = 4000;     // lista gier odswieza sie sama, dopoki jest na ekranie
   const PAD_LOBBY_KIND = 'pad';       // LobbyKind.Pad w MatchmakingManager.cs (indeksowane pole S1)
   const DEFAULT_THEME = '#14161c';
+  const FULL_TEXT = 'Wszystkie pady w tej grze są zajęte. Wybierz inną grę albo spróbuj, gdy ktoś wyjdzie.';
   const OPEN_TIMEOUT_MS = 10000;
   const INPUT_RESEND_MS = 100;        // kanal wejscia jest bez retransmisji - stan powtarzamy, zgubiony pakiet nie zostawi wcisnietego przycisku
   const PING_INTERVAL_MS = 500;       // czeste pingi trzymaja Wi-Fi telefonu w trybie aktywnym (mniejsze skoki opoznienia)
@@ -284,11 +312,14 @@
   const VIBRATE_MS = 8;
   // Te same identyfikatory co SkinDefinition.Id w prefabie gracza; obrazki w skins/<id>.png
   const SKINS = [
-    { id: 'sausage', name: 'Parówka' },
-    { id: 'avocado', name: 'Awokado' },
-    { id: 'coffee', name: 'Kawa' },
-    { id: 'milk', name: 'Mleko' },
-    { id: 'potato', name: 'Ziemniak' }
+    { id: 'sausage', name: 'Parówa Dorian' },
+    { id: 'avocado', name: 'Awokado Kornel' },
+    { id: 'coffee', name: 'Kawa Karolina' },
+    { id: 'milk', name: 'Mleko Agnieszka' },
+    { id: 'potato', name: 'Pyra Michał' },
+    { id: 'burger', name: 'Burger Julia' },
+    { id: 'energy', name: 'Energetyk Niko' },
+    { id: 'toast', name: 'Tost Teo' }
   ];
   // Obiekty do budowania - te same Id co w PlacementManager (Gamephase); obrazki w items/<id>.png.
   // w x h = rozmiar w kratkach, frames = ile klatek animacji lezy obok siebie w pliku.
@@ -315,9 +346,8 @@
     constructor(title, text) { super(title); this.title = title; this.text = text; }
   }
 
-  // Kod z QR; po wyborze gry z listy uzupelniamy go, zeby odswiezenie strony wracalo do tej samej gry.
-  let lobbyCode = (new URLSearchParams(location.search).get('c') || '').trim().toUpperCase();
-  let targetLobbyId = null;  // gra wybrana z listy (bez kodu)
+  // Kod QR tylko otwiera strone - gre gracz wybiera sam z listy (ekran startowy -> GRAJ -> lista).
+  let targetLobbyId = null;  // gra wybrana z listy
   let serverTimer = null;
   let serversLoading = false;
   let connectRun = 0;  // kazde laczenie ma swoj numer - "Wybierz inna gre" porzuca biezace
@@ -344,7 +374,7 @@
   function show(id) {
     screenName = id;
     document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === id));
-    $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', build: 'Budowanie', connecting: 'Łączenie…', servers: 'Wybór gry' }[id] || '';
+    $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', build: 'Budowanie', connecting: 'Łączenie…', servers: 'Wybór gry', home: 'Menu' }[id] || '';
     if (id !== 'build') stopRepeat();
     if (id !== 'game') setMask(0);
   }
@@ -401,32 +431,15 @@
   async function joinLobby() {
     const player = { id: auth.userId, data: {} };
     try {
-      const lobby = lobbyCode
-        ? await lobbyFetch('POST', '/joinbycode', { lobbyCode, player })
-        : await lobbyFetch('POST', `/${targetLobbyId}/join`, { player });
-      rememberLobby(lobby);
+      const lobby = await lobbyFetch('POST', `/${targetLobbyId}/join`, { player });
       return lobby.id;
     } catch (e) {
-      if (e.code === 16003) {  // juz jestesmy w tym lobby (odswiezona strona)
-        if (!lobbyCode) return targetLobbyId;
-        const saved = store.get('padLobby:' + lobbyCode);
-        if (saved) return saved;
-        const joined = await lobbyFetch('GET', '/joined');
-        if (joined && joined.length) return joined[joined.length - 1];
-      }
-      if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę albo kod jest nieaktualny. Zeskanuj kod QR jeszcze raz albo wybierz inną grę.');
-      if (e.status === 409) throw new FatalError('Brak wolnych miejsc', 'Wszystkie pady są zajęte. Odśwież stronę, gdy ktoś wyjdzie.');
+      // Juz jestesmy w tym lobby (odswiezona strona) - host rozpozna nas po id gracza i odda te sama postac.
+      if (e.code === 16003) return targetLobbyId;
+      if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę. Wybierz inną grę z listy.');
+      if (e.status === 409) throw new FatalError('Brak wolnych miejsc', FULL_TEXT);
       throw e;
     }
-  }
-
-  // Gra wybrana z listy dostaje kod w adresie - odswiezenie strony albo udostepnienie linku trafia do niej.
-  function rememberLobby(lobby) {
-    if (!lobbyCode && lobby.lobbyCode) {
-      lobbyCode = lobby.lobbyCode;
-      try { history.replaceState(null, '', '?c=' + encodeURIComponent(lobbyCode)); } catch (e) { /* bez zmiany adresu */ }
-    }
-    if (lobbyCode) store.set('padLobby:' + lobbyCode, lobby.id);
   }
 
   // ---------- Lista gier ----------
@@ -476,6 +489,22 @@
       : 'Brak gier. Uruchom grę na komputerze i wybierz Host.';
   }
 
+  function showHome() {
+    clearInterval(serverTimer);
+    serverTimer = null;
+    show('home');
+  }
+
+  function buildCast() {
+    SKINS.forEach((skin, i) => {
+      const sprite = document.createElement('span');
+      sprite.style.backgroundImage = `url(skins/${skin.id}.png)`;
+      sprite.style.animationDelay = `${-i * 0.13}s`;  // kazdy idzie innym krokiem
+      sprite.title = skin.name;
+      $('cast').append(sprite);
+    });
+  }
+
   function showServers() {
     show('servers');
     refreshServers();
@@ -500,11 +529,9 @@
     if (lobbyId && auth) lobbyFetch('DELETE', `/${lobbyId}/players/${auth.userId}`).catch(() => { /* lobby moglo zniknac */ });
     lobbyId = null;
     targetLobbyId = null;
-    lobbyCode = '';
     gameLabel = '';
     connectStartedAt = 0;
     wasConnected = false;
-    try { history.replaceState(null, '', location.pathname); } catch (e) { /* bez zmiany adresu */ }
     $('overlay').classList.remove('show');
     $('badge').textContent = '?';
     document.documentElement.style.removeProperty('--pc');
@@ -730,7 +757,7 @@
         if (match) answer = match.slice(prefix.length);
         else setStepNote('answer', `sprawdzono ${++checks}× – jeszcze bez odpowiedzi`);
       } catch (e) {
-        if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę. Zeskanuj nowy kod QR albo wybierz inną grę.');
+        if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę. Wybierz inną grę z listy.');
         if (e.status !== 429) throw e;  // 429 = za czesto, po prostu probujemy dalej
         setStepNote('answer', 'serwer gier prosi o wolniejsze zapytania – czekam');
       }
@@ -862,7 +889,7 @@
         break;
       case 'f':
         closePeer();
-        showMessage('Brak wolnych miejsc', 'Wszystkie pady są zajęte. Odśwież stronę, gdy ktoś wyjdzie.');
+        showMessage('Brak wolnych miejsc', FULL_TEXT);
         break;
     }
   }
@@ -1050,6 +1077,7 @@
       sprite.className = 'sprite';
       sprite.style.backgroundImage = `url(skins/${skin.id}.png)`;
       const label = document.createElement('span');
+      label.className = 'name';
       label.textContent = skin.name;
       button.append(sprite, label, document.createElement('small'));
       button.addEventListener('click', () => pickSkin(skin.id));
@@ -1093,7 +1121,7 @@
     if (document.hidden) {
       mouseMask = keyMask = 0;
       setMask(0);  // zablokowany ekran nie moze zostawic wcisnietego przycisku
-    } else if (!pc && screenName !== 'message' && screenName !== 'servers') {
+    } else if (!pc && targetLobbyId && screenName !== 'message') {  // wybrana gra, a polaczenie padlo przy zgaszonym ekranie
       reconnect();
     }
   });
@@ -1104,13 +1132,15 @@
   document.querySelectorAll('.toServers').forEach(button => button.addEventListener('click', backToServers));
   $('refreshServers').addEventListener('click', refreshServers);
 
-  // Z kodem QR prosto do gry; bez kodu (np. telefon w innej sieci) - lista gier.
-  if (!lobbyCode) {
-    showServers();
-  } else {
-    gameLabel = 'Kod gry: ' + lobbyCode;
-    run();
+  $('play').addEventListener('click', showServers);
+  $('toHome').addEventListener('click', showHome);
+
+  // Zawsze zaczynamy od ekranu startowego; stary kod "?c=" z adresu (dawne kody QR) nic juz nie robi.
+  if (location.search) {
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* bez zmiany adresu */ }
   }
+  buildCast();
+  showHome();
 })();
 </script>
 </body>

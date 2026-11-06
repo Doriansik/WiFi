@@ -8,7 +8,7 @@ using Unity.Services.Lobbies.Models;
 using UnityEngine;
 
 #region Pad Signaling
-// "Zapoznanie" telefonu z hostem przez Unity Lobby: lobby z kodem z QR (albo wybrane z listy), telefon wpisuje oferte WebRTC
+// "Zapoznanie" telefonu z hostem przez Unity Lobby: publiczne lobby wybrane z listy na stronie pada, telefon wpisuje oferte WebRTC
 // do swoich danych gracza, host odpowiada w danych lobby. Po polaczeniu Lobby nie bierze udzialu w grze.
 public sealed class PadSignaling
 {
@@ -37,8 +37,6 @@ public sealed class PadSignaling
 
     // Wolane na watku glownym: idGracza, nonce, SDP oferty.
     public event Action<string, string, string> OnOfferReceived;
-
-    public string LobbyCode => _lobby?.LobbyCode;
 
     public PadSignaling(int maxPads)
     {
