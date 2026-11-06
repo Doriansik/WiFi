@@ -298,9 +298,12 @@
   const ENVIRONMENT = 'production';
   const AUTH_URL = 'https://player-auth.services.api.unity.com/v1/authentication';
   const LOBBY_URL = 'https://lobby.services.api.unity.com/v1';
-  const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+  // Dwa serwery STUN - telefon na danych komorkowych czasem dlugo czeka na odpowiedz jednego z nich.
+  const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
   const MAX_LOBBY_VALUE = 2048;
-  const GATHER_TIMEOUT_MS = 2500;
+  const GATHER_TIMEOUT_MS = 6000;     // gorna granica; zwykle konczymy chwile po adresie publicznym (srflx)
+  const GATHER_SETTLE_MS = 400;       // po pierwszym adresie publicznym czekamy jeszcze chwile na pozostale
+  const REMOTE_ATTEMPTS = 3;          // tyle prob z innej sieci bez TURN, zanim powiemy, ze sie nie da
   const POLL_INTERVAL_MS = 1100;      // limit Lobby: odczyt max raz na sekunde
   const ANSWER_TIMEOUT_MS = 15000;
   const SERVER_REFRESH_MS = 4000;     // lista gier odswieza sie sama, dopoki jest na ekranie
@@ -533,6 +536,7 @@
     lobbyId = null;
     targetLobbyId = null;
     gameLabel = '';
+    remoteFailures = 0;
     connectStartedAt = 0;
     wasConnected = false;
     $('overlay').classList.remove('show');
@@ -547,12 +551,21 @@
 
   // ---------- WebRTC ----------
 
-  function waitForGathering(peer) {
+  // Bez adresu publicznego (srflx) telefon z innej sieci nie ma szans sie polaczyc - czekamy na niego dluzej,
+  // ale nie na pelne "complete", ktore na danych komorkowych potrafi trwac kilkanascie sekund.
+  // Z TURN czekamy na adres przekaznika (relay), bo to on daje pewne polaczenie.
+  function waitForGathering(peer, needRelay) {
     return new Promise(resolve => {
       if (peer.iceGatheringState === 'complete') return resolve();
-      const timer = setTimeout(resolve, GATHER_TIMEOUT_MS);
+      let settleTimer = null;
+      const done = () => { clearTimeout(timer); clearTimeout(settleTimer); resolve(); };
+      const timer = setTimeout(done, GATHER_TIMEOUT_MS);
+      const wanted = needRelay ? / typ relay/ : / typ (srflx|relay)/;
       peer.addEventListener('icegatheringstatechange', () => {
-        if (peer.iceGatheringState === 'complete') { clearTimeout(timer); resolve(); }
+        if (peer.iceGatheringState === 'complete') done();
+      });
+      peer.addEventListener('icecandidate', e => {
+        if (!settleTimer && e.candidate && wanted.test(e.candidate.candidate)) settleTimer = setTimeout(done, GATHER_SETTLE_MS);
       });
     });
   }
@@ -744,6 +757,7 @@
   let routeRemote = false;
   let routeRelay = false;
   let welcomeRoute = '';  // opis drogi pokazywany w ostatnim kroku
+  let remoteFailures = 0;  // nieudane proby z innej sieci bez TURN pod rzad
 
   // a=candidate:<fundacja> <komponent> <protokol> <priorytet> <adres> <port> typ <typ> ...
   const candidates = sdp => sdp.split(/\r?\n/).filter(l => l.startsWith('a=candidate:')).map(l => l.split(' '));
@@ -821,7 +835,7 @@
     pc = peer; ctl = control; inp = input;
 
     await peer.setLocalDescription(await peer.createOffer());
-    await waitForGathering(peer);
+    await waitForGathering(peer, turnServers.length > 0);
     if (pc !== peer) throw new Error(INTERRUPTED);
 
     const nonce = randomHex(4);
@@ -864,7 +878,12 @@
     try {
       await waitForOpen(control);
     } catch (e) {
-      if (routeRemote && !routeRelay) throw new FatalError('Nie da się połączyć zdalnie', REMOTE_NO_TURN_TEXT);
+      // Bez TURN polaczenie z innej sieci czasem wychodzi dopiero przy kolejnej probie - poddajemy sie po kilku.
+      if (routeRemote && !routeRelay && ++remoteFailures >= REMOTE_ATTEMPTS) {
+        remoteFailures = 0;
+        throw new FatalError('Nie da się połączyć zdalnie', REMOTE_NO_TURN_TEXT);
+      }
+      if (routeRemote && !routeRelay) throw new Error(`inna sieć, bez przekaźnika – próbuję jeszcze raz (${remoteFailures}/${REMOTE_ATTEMPTS})`);
       throw new Error('nie udało się połączyć z komputerem (' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState) + ')');
     }
 
@@ -952,6 +971,7 @@
         detectRoute(connectedPeer).then(route => { if (pc === connectedPeer) showRoute(route); });
         watchWelcome(connectedPeer, ctl);
         wasConnected = true;
+        remoteFailures = 0;
         $('overlay').classList.remove('show');
         break;
       } catch (e) {
