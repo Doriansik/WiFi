@@ -138,11 +138,45 @@
   #build.placed .buildControls { opacity: 0.2; pointer-events: none; }
   #build.placed .placedInfo { display: grid; }
 
+  /* Postep laczenia: kazdy krok z licznikiem - widac, ze strona nie wisi */
+  #connecting { justify-content: safe center; overflow-y: auto; }
+  .steps { list-style: none; margin: 0; padding: 12px 14px; width: min(380px, 100%); display: flex; flex-direction: column; gap: 8px; text-align: left; background: var(--panel); border-radius: 14px; }
+  .steps li { display: grid; grid-template-columns: 20px 1fr auto; column-gap: 10px; align-items: center; color: var(--muted); font-size: 15px; }
+  .steps .mark { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 800; line-height: 1; }
+  .steps .time { font-variant-numeric: tabular-nums; font-size: 13px; }
+  .steps .note { grid-column: 2 / 4; font-size: 13px; }
+  .steps .note:empty { display: none; }
+  .steps li.active { color: var(--text); font-weight: 700; }
+  .steps li.active .mark { border-top-color: var(--pc); animation: spin 0.9s linear infinite; }
+  .steps li.active .note { color: var(--muted); font-weight: 400; }
+  .steps li.done .mark { border-color: #22c55e; background: #22c55e; color: #0b1a10; }
+  .steps li.failed { color: #f87171; }
+  .steps li.failed .mark { border-color: #ef4444; background: #ef4444; color: #fff; }
+  .warn { color: #fbbf24; }
+  .hint:empty { display: none; }
+
+  /* Lista gier - dla telefonu bez kodu QR (np. inne Wi-Fi) */
+  #servers { flex-direction: column; align-items: center; gap: 14px; overflow-y: auto; text-align: center; }
+  #servers h1 { margin: 8px 0 0; font-size: 24px; }
+  .serverList { width: min(420px, 100%); display: flex; flex-direction: column; gap: 8px; }
+  .server {
+    display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; text-align: left;
+    border: 2px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); font: inherit;
+  }
+  .server:active { border-color: var(--pc); }
+  .server b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 18px; }
+  .server small { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .secondary {
+    padding: 12px 20px; border-radius: 12px; border: 2px solid var(--line);
+    background: transparent; color: var(--text); font: inherit; font-weight: 700;
+  }
+
   #overlay {
     position: fixed; inset: 0; display: none; place-items: center; background: rgba(10, 12, 16, 0.78); z-index: 5;
   }
   #overlay.show { display: grid; }
-  #overlay div { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text); }
+  #overlay > div { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text); padding: 0 16px; text-align: center; }
+  #overlay small { color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.3em; }
 </style>
 </head>
 <body>
@@ -155,14 +189,27 @@
 <main>
   <section id="connecting" class="center active">
     <div class="spinner"></div>
-    <h1 id="connectingTitle">Łączenie z hostem…</h1>
-    <p>Telefon musi być w tej samej sieci Wi-Fi co komputer z grą.</p>
-    <p class="hint" id="connectingDetail"></p>
+    <h1>Łączenie z grą…</h1>
+    <p class="hint" id="connectingMeta"></p>
+    <ol class="steps" id="steps"></ol>
+    <p class="hint warn" id="connectingDetail"></p>
+    <p class="hint" id="connectingTip"></p>
+    <p class="hint">Licznik sekund rośnie – strona działa. Nie trzeba odświeżać: po błędzie łączę ponownie sam.</p>
+    <button class="secondary toServers" type="button">Wybierz inną grę</button>
   </section>
 
   <section id="message" class="center">
     <h1 id="messageTitle"></h1>
     <p id="messageText"></p>
+    <button class="secondary toServers" type="button">Wybierz inną grę</button>
+  </section>
+
+  <section id="servers">
+    <h1>Wybierz grę</h1>
+    <p class="hint" id="serversHint">Szukam gier…</p>
+    <div class="serverList" id="serverList"></div>
+    <button class="secondary" id="refreshServers" type="button">Odśwież</button>
+    <p class="hint">Gra nazywa się tak jak komputer, na którym działa. Kod QR z ekranu prowadzi od razu do właściwej gry.</p>
   </section>
 
   <section id="lobby">
@@ -212,7 +259,7 @@
   </section>
 </main>
 
-<div id="overlay"><div><div class="spinner"></div><b>Połączenie zerwane – łączę ponownie…</b></div></div>
+<div id="overlay"><div><div class="spinner"></div><b>Połączenie zerwane – łączę ponownie…</b><small id="overlayDetail"></small><button class="secondary toServers" type="button">Wybierz inną grę</button></div></div>
 
 <script>
 (() => {
@@ -227,6 +274,9 @@
   const GATHER_TIMEOUT_MS = 2500;
   const POLL_INTERVAL_MS = 1100;      // limit Lobby: odczyt max raz na sekunde
   const ANSWER_TIMEOUT_MS = 15000;
+  const SERVER_REFRESH_MS = 4000;     // lista gier odswieza sie sama, dopoki jest na ekranie
+  const PAD_LOBBY_KIND = 'pad';       // LobbyKind.Pad w MatchmakingManager.cs (indeksowane pole S1)
+  const DEFAULT_THEME = '#14161c';
   const OPEN_TIMEOUT_MS = 10000;
   const INPUT_RESEND_MS = 100;        // kanal wejscia jest bez retransmisji - stan powtarzamy, zgubiony pakiet nie zostawi wcisnietego przycisku
   const PING_INTERVAL_MS = 500;       // czeste pingi trzymaja Wi-Fi telefonu w trybie aktywnym (mniejsze skoki opoznienia)
@@ -265,7 +315,12 @@
     constructor(title, text) { super(title); this.title = title; this.text = text; }
   }
 
-  const lobbyCode = (new URLSearchParams(location.search).get('c') || '').trim().toUpperCase();
+  // Kod z QR; po wyborze gry z listy uzupelniamy go, zeby odswiezenie strony wracalo do tej samej gry.
+  let lobbyCode = (new URLSearchParams(location.search).get('c') || '').trim().toUpperCase();
+  let targetLobbyId = null;  // gra wybrana z listy (bez kodu)
+  let serverTimer = null;
+  let serversLoading = false;
+  let connectRun = 0;  // kazde laczenie ma swoj numer - "Wybierz inna gre" porzuca biezace
   const cleanName = value => value.replace(/[|<>\u0000-\u001f]/g, '').trim().slice(0, 20);
   let name = cleanName(store.get('padName') || '') || 'Gracz';
   let ready = false;
@@ -289,7 +344,7 @@
   function show(id) {
     screenName = id;
     document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === id));
-    $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', build: 'Budowanie', connecting: 'Łączenie…' }[id] || '';
+    $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', build: 'Budowanie', connecting: 'Łączenie…', servers: 'Wybór gry' }[id] || '';
     if (id !== 'build') stopRepeat();
     if (id !== 'game') setMask(0);
   }
@@ -344,22 +399,120 @@
   }
 
   async function joinLobby() {
-    const storageKey = 'padLobby:' + lobbyCode;
+    const player = { id: auth.userId, data: {} };
     try {
-      const lobby = await lobbyFetch('POST', '/joinbycode', { lobbyCode, player: { id: auth.userId, data: {} } });
-      store.set(storageKey, lobby.id);
+      const lobby = lobbyCode
+        ? await lobbyFetch('POST', '/joinbycode', { lobbyCode, player })
+        : await lobbyFetch('POST', `/${targetLobbyId}/join`, { player });
+      rememberLobby(lobby);
       return lobby.id;
     } catch (e) {
       if (e.code === 16003) {  // juz jestesmy w tym lobby (odswiezona strona)
-        const saved = store.get(storageKey);
+        if (!lobbyCode) return targetLobbyId;
+        const saved = store.get('padLobby:' + lobbyCode);
         if (saved) return saved;
         const joined = await lobbyFetch('GET', '/joined');
         if (joined && joined.length) return joined[joined.length - 1];
       }
-      if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę albo kod jest nieaktualny. Zeskanuj kod QR jeszcze raz.');
+      if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę albo kod jest nieaktualny. Zeskanuj kod QR jeszcze raz albo wybierz inną grę.');
       if (e.status === 409) throw new FatalError('Brak wolnych miejsc', 'Wszystkie pady są zajęte. Odśwież stronę, gdy ktoś wyjdzie.');
       throw e;
     }
+  }
+
+  // Gra wybrana z listy dostaje kod w adresie - odswiezenie strony albo udostepnienie linku trafia do niej.
+  function rememberLobby(lobby) {
+    if (!lobbyCode && lobby.lobbyCode) {
+      lobbyCode = lobby.lobbyCode;
+      try { history.replaceState(null, '', '?c=' + encodeURIComponent(lobbyCode)); } catch (e) { /* bez zmiany adresu */ }
+    }
+    if (lobbyCode) store.set('padLobby:' + lobbyCode, lobby.id);
+  }
+
+  // ---------- Lista gier ----------
+
+  async function refreshServers() {
+    if (serversLoading || screenName !== 'servers') return;
+    serversLoading = true;
+    try {
+      if (!auth) auth = await signIn();
+      const response = await lobbyFetch('POST', '/query', {
+        count: 25,
+        filter: [
+          { field: 'S1', op: 'EQ', value: PAD_LOBBY_KIND },
+          { field: 'AvailableSlots', op: 'GT', value: '0' }
+        ]
+      });
+      if (screenName === 'servers') renderServers((response && response.results) || []);
+    } catch (e) {
+      if (e.status !== 429) {  // 429 = za czesto, nastepne odswiezenie i tak przyjdzie
+        console.warn('Pad: lista gier niedostepna', e);
+        $('serversHint').textContent = 'Nie udało się pobrać listy gier – sprawdź internet.';
+      }
+    } finally {
+      serversLoading = false;
+    }
+  }
+
+  function renderServers(lobbies) {
+    lobbies.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pl'));
+    $('serverList').replaceChildren(...lobbies.map(lobby => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'server';
+      const title = document.createElement('b');
+      title.textContent = lobby.name || 'Gra';
+      // Jedno miejsce w lobby zajmuje host - reszta to pady.
+      const pads = (lobby.maxPlayers || 1) - 1;
+      const taken = pads - (lobby.availableSlots || 0);
+      const players = document.createElement('small');
+      players.textContent = `${taken}/${pads}`;
+      button.append(title, players);
+      button.addEventListener('click', () => chooseServer(lobby.id, lobby.name));
+      return button;
+    }));
+    $('serversHint').textContent = lobbies.length
+      ? 'Dotknij gry, żeby dołączyć.'
+      : 'Brak gier. Uruchom grę na komputerze i wybierz Host.';
+  }
+
+  function showServers() {
+    show('servers');
+    refreshServers();
+    if (!serverTimer) serverTimer = setInterval(refreshServers, SERVER_REFRESH_MS);
+  }
+
+  function chooseServer(id, gameName) {
+    clearInterval(serverTimer);
+    serverTimer = null;
+    targetLobbyId = id;
+    lobbyId = null;
+    gameLabel = 'Gra: ' + (gameName || 'bez nazwy');
+    show('connecting');
+    run();
+  }
+
+  // Porzuca biezaca gre (albo trwajace laczenie) i wraca do listy.
+  function backToServers() {
+    connectRun++;
+    connecting = false;
+    closePeer();
+    if (lobbyId && auth) lobbyFetch('DELETE', `/${lobbyId}/players/${auth.userId}`).catch(() => { /* lobby moglo zniknac */ });
+    lobbyId = null;
+    targetLobbyId = null;
+    lobbyCode = '';
+    gameLabel = '';
+    connectStartedAt = 0;
+    wasConnected = false;
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* bez zmiany adresu */ }
+    $('overlay').classList.remove('show');
+    $('badge').textContent = '?';
+    document.documentElement.style.removeProperty('--pc');
+    document.querySelector('meta[name=theme-color]').content = DEFAULT_THEME;
+    $('dot').className = 'dot';
+    $('ping').textContent = '— ms';
+    rttSmoothed = null;
+    showServers();
   }
 
   // ---------- WebRTC ----------
@@ -403,16 +556,142 @@
     }
   }
 
-  // Etap laczenia widoczny pod tytulem - gracz moze przepisac go przy zglaszaniu problemu.
-  function setDetail(text) {
-    $('connectingDetail').textContent = text;
+  // ---------- Postep laczenia ----------
+  // Kazdy krok ma licznik sekund (i limit, jesli jest) - widac, ze strona nie wisi i na czym ewentualnie stoi.
+  // Gracz moze przepisac krok i opis przy zglaszaniu problemu.
+
+  const STEPS = [
+    { id: 'auth', label: 'Logowanie do usług gry', slowAfter: 5000,
+      tip: 'Serwer logowania odpowiada wolno – sprawdź internet w telefonie.' },
+    { id: 'join', label: 'Dołączanie do gry', slowAfter: 5000,
+      tip: 'Serwer gier odpowiada wolno – sprawdź internet w telefonie.' },
+    { id: 'offer', label: 'Przygotowanie połączenia', slowAfter: 4000,
+      tip: 'Telefon zbiera swoje adresy w sieci – to trwa najwyżej kilka sekund.' },
+    { id: 'answer', label: 'Czekanie na odpowiedź komputera', limit: ANSWER_TIMEOUT_MS, slowAfter: 6000,
+      tip: 'Komputer sprawdza nowe telefony co 1–3 s. Jeśli to trwa długo, sprawdź, czy gra na komputerze działa i ma internet.' },
+    { id: 'direct', label: 'Łączenie bezpośrednie z komputerem', limit: OPEN_TIMEOUT_MS, slowAfter: 4000,
+      tip: 'Telefon i komputer szukają drogi do siebie. Najpewniej działa w tej samej sieci Wi-Fi co komputer – w innej sieci może się nie udać.' },
+    { id: 'welcome', label: 'Odbieranie stanu gry', slowAfter: 3000,
+      tip: 'Połączenie jest gotowe – komputer powinien zaraz przysłać stan gry.' }
+  ];
+  const ICE_STATES = {
+    new: 'start', checking: 'szukanie drogi do komputera', connected: 'połączono', completed: 'połączono',
+    disconnected: 'chwilowo przerwane', failed: 'nie znaleziono drogi', closed: 'zamknięte'
+  };
+  const INTERRUPTED = 'połączenie przerwane w trakcie';
+
+  let stepIndex = -1;
+  let stepStartedAt = 0;
+  let stepNote = '';
+  let failedIndex = -1;
+  let stepTimes = [];  // czas ukonczonych krokow w ms; null = zrobione przy wczesniejszej probie
+  let connectStartedAt = 0;
+  let attemptNumber = 0;
+  let retryAt = 0;
+  let retryReason = '';
+  let gameLabel = '';
+
+  const seconds = ms => Math.max(0, Math.floor(ms / 1000)) + ' s';
+  const preciseSeconds = ms => (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+
+  function resetSteps() {
+    stepIndex = -1;
+    failedIndex = -1;
+    stepNote = '';
+    stepTimes = [];
+    retryAt = 0;
+    $('steps').replaceChildren(...STEPS.map(step => {
+      const item = document.createElement('li');
+      item.innerHTML = '<span class="mark"></span><span class="label"></span><span class="time"></span><small class="note"></small>';
+      item.querySelector('.label').textContent = step.label;
+      return item;
+    }));
+    renderProgress();
   }
+
+  function beginStep(id, note) {
+    const index = STEPS.findIndex(step => step.id === id);
+    const now = performance.now();
+    for (let i = 0; i < index; i++) {
+      if (stepTimes[i] === undefined) stepTimes[i] = i === stepIndex ? now - stepStartedAt : null;
+    }
+    stepIndex = index;
+    stepStartedAt = now;
+    stepNote = note || '';
+    renderProgress();
+  }
+
+  function setStepNote(id, note) {
+    if (STEPS[stepIndex] && STEPS[stepIndex].id === id && failedIndex < 0) {
+      stepNote = note;
+      renderProgress();
+    }
+  }
+
+  function finishSteps() {
+    if (!STEPS[stepIndex]) return;
+    stepTimes[stepIndex] = performance.now() - stepStartedAt;
+    stepIndex = STEPS.length;
+    renderProgress();
+  }
+
+  function failStep(reason, retryInMs) {
+    failedIndex = stepIndex;
+    stepNote = reason;
+    retryReason = reason;
+    retryAt = performance.now() + retryInMs;
+    renderProgress();
+  }
+
+  // Bledy przegladarki sa po angielsku i nic nie mowia graczowi.
+  function describeError(e) {
+    if (e instanceof TypeError) return 'brak internetu albo serwer nie odpowiada';
+    if (e.status === 429) return 'serwer gier prosi o wolniejsze zapytania';
+    return e.message || String(e);
+  }
+
+  function renderProgress() {
+    const now = performance.now();
+    const items = $('steps').children;
+    STEPS.forEach((step, i) => {
+      const item = items[i];
+      if (!item) return;
+      const state = i === failedIndex ? 'failed' : stepTimes[i] !== undefined ? 'done' : i === stepIndex ? 'active' : 'pending';
+      item.className = state;
+      item.querySelector('.mark').textContent = { done: '✓', failed: '✕' }[state] || '';
+      let time = '';
+      if (state === 'done') time = stepTimes[i] === null ? 'wcześniej' : preciseSeconds(stepTimes[i]);
+      if (state === 'active') time = seconds(now - stepStartedAt) + (step.limit ? ' / ' + seconds(step.limit) : '');
+      item.querySelector('.time').textContent = time;
+      item.querySelector('.note').textContent = state === 'active' || state === 'failed' ? stepNote : '';
+    });
+
+    const active = STEPS[stepIndex];
+    const isSlow = active && failedIndex < 0 && now - stepStartedAt > active.slowAfter;
+    $('connectingTip').textContent = isSlow ? active.tip : '';
+    $('connectingMeta').textContent = [
+      gameLabel,
+      attemptNumber > 1 ? 'próba ' + attemptNumber : '',
+      connectStartedAt ? 'łączę od ' + seconds(now - connectStartedAt) : ''
+    ].filter(Boolean).join(' · ');
+
+    const retry = retryAt > now ? `Nie udało się: ${retryReason}. Ponawiam za ${Math.ceil((retryAt - now) / 1000)} s…` : '';
+    $('connectingDetail').textContent = retry;
+    $('overlayDetail').textContent = retry
+      || (active ? `Krok ${stepIndex + 1}/${STEPS.length}: ${active.label} · ${seconds(now - stepStartedAt)}` : '');
+  }
+
+  setInterval(() => {
+    if (screenName === 'connecting' || $('overlay').classList.contains('show')) renderProgress();
+  }, 250);
 
   async function connectPeer() {
     closePeer();
+    beginStep('offer', 'zbieranie adresów telefonu w sieci');
     const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const describeIce = () => 'stan: ' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState);
     peer.oniceconnectionstatechange = () => {
-      if (pc === peer && peer.iceConnectionState !== 'connected') setDetail('Wi-Fi: ' + peer.iceConnectionState);
+      if (pc === peer) setStepNote('direct', describeIce());
     };
     const control = peer.createDataChannel('ctl');
     const input = peer.createDataChannel('in', { ordered: false, maxRetransmits: 0 });
@@ -427,37 +706,43 @@
 
     await peer.setLocalDescription(await peer.createOffer());
     await waitForGathering(peer);
+    if (pc !== peer) throw new Error(INTERRUPTED);
 
     const nonce = randomHex(4);
     const offer = nonce + '|' + fitSdp(peer.localDescription.sdp, MAX_LOBBY_VALUE - nonce.length - 1);
+    setStepNote('offer', 'wysyłanie zgłoszenia do komputera');
     await lobbyFetch('POST', `/${lobbyId}/players/${auth.userId}`, { data: { o: { value: offer, visibility: 'member' } } });
-    setDetail('Czekam na odpowiedź hosta…');
+    if (pc !== peer) throw new Error(INTERRUPTED);
+    beginStep('answer', 'zgłoszenie wysłane, czekam aż komputer je odbierze');
 
     // Host odpowiada w danych lobby: idGracza|nonce|sdp.
     const prefix = `${auth.userId}|${nonce}|`;
     const deadline = performance.now() + ANSWER_TIMEOUT_MS;
     let answer = null;
+    let checks = 0;
     while (!answer && performance.now() < deadline) {
       await sleep(POLL_INTERVAL_MS);
-      if (pc !== peer) throw new Error('replaced');
+      if (pc !== peer) throw new Error(INTERRUPTED);
       try {
         const lobby = await lobbyFetch('GET', `/${lobbyId}`);
         const values = Object.values(lobby.data || {}).map(d => d.value || '');
         const match = values.find(v => v.startsWith(prefix));
         if (match) answer = match.slice(prefix.length);
+        else setStepNote('answer', `sprawdzono ${++checks}× – jeszcze bez odpowiedzi`);
       } catch (e) {
-        if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę. Zeskanuj nowy kod QR.');
+        if (e.status === 404) throw new FatalError('Gra już nie istnieje', 'Host zamknął grę. Zeskanuj nowy kod QR albo wybierz inną grę.');
         if (e.status !== 429) throw e;  // 429 = za czesto, po prostu probujemy dalej
+        setStepNote('answer', 'serwer gier prosi o wolniejsze zapytania – czekam');
       }
     }
-    if (!answer) throw new Error('host nie odpowiedział – czy gra na komputerze jest w lobby?');
+    if (!answer) throw new Error('komputer nie odpowiedział w ' + seconds(ANSWER_TIMEOUT_MS) + ' – czy gra na komputerze działa?');
 
-    setDetail('Łączenie bezpośrednie po Wi-Fi…');
+    beginStep('direct', describeIce());
     await peer.setRemoteDescription({ type: 'answer', sdp: answer });
     try {
       await waitForOpen(control);
     } catch (e) {
-      throw new Error('brak bezpośredniego połączenia po Wi-Fi (' + peer.iceConnectionState + ')');
+      throw new Error('brak bezpośredniego połączenia z komputerem (' + (ICE_STATES[peer.iceConnectionState] || peer.iceConnectionState) + ')');
     }
 
     peer.onconnectionstatechange = () => {
@@ -479,21 +764,39 @@
   async function run() {
     if (connecting) return;
     connecting = true;
+    const thisRun = ++connectRun;
+    const abandoned = () => thisRun !== connectRun;
     let delay = 500;
     let attempt = 0;
+    connectStartedAt = performance.now();
     while (true) {
       attempt++;
+      attemptNumber = attempt;
+      resetSteps();
       try {
-        $('connectingTitle').textContent = 'Logowanie…';
-        if (!auth) auth = await signIn();
-        $('connectingTitle').textContent = 'Dołączanie do gry…';
-        if (!lobbyId) lobbyId = await joinLobby();
-        $('connectingTitle').textContent = 'Łączenie z hostem…';
+        if (!auth) {
+          beginStep('auth');
+          auth = await signIn();
+        }
+        if (abandoned()) break;
+        if (!lobbyId) {
+          beginStep('join', gameLabel);
+          const joinedId = await joinLobby();
+          if (abandoned()) {
+            // Gracz zdazyl wybrac inna gre - nie zajmujemy miejsca w tej.
+            lobbyFetch('DELETE', `/${joinedId}/players/${auth.userId}`).catch(() => { /* lobby moglo zniknac */ });
+            break;
+          }
+          lobbyId = joinedId;
+        }
         await connectPeer();
+        if (abandoned()) break;
+        beginStep('welcome');  // konczy sie, gdy host przysle faze gry ("s|...")
         wasConnected = true;
         $('overlay').classList.remove('show');
         break;
       } catch (e) {
+        if (abandoned()) break;  // nie zamykamy polaczenia, ktore nalezy juz do nowej gry
         closePeer();
         if (e instanceof FatalError) {
           $('overlay').classList.remove('show');
@@ -501,12 +804,13 @@
           break;
         }
         console.warn('Pad: proba polaczenia nieudana', e);
-        setDetail(`Próba ${attempt} nieudana: ${e.message}. Ponawiam…`);
+        failStep(describeError(e), delay);
         await sleep(delay);
+        if (abandoned()) break;
         delay = Math.min(delay * 2, 4000);
       }
     }
-    connecting = false;
+    if (!abandoned()) connecting = false;  // porzucone laczenie: flage zwolnil juz backToServers
   }
 
   function reconnect() {
@@ -535,6 +839,7 @@
         document.querySelector('meta[name=theme-color]').content = parts[2];
         break;
       case 's':
+        finishSteps();
         show(parts[1] === 'game' || parts[1] === 'build' ? parts[1] : 'lobby');
         break;
       case 'q':
@@ -788,7 +1093,7 @@
     if (document.hidden) {
       mouseMask = keyMask = 0;
       setMask(0);  // zablokowany ekran nie moze zostawic wcisnietego przycisku
-    } else if (!pc && screenName !== 'message') {
+    } else if (!pc && screenName !== 'message' && screenName !== 'servers') {
       reconnect();
     }
   });
@@ -796,9 +1101,14 @@
   renderReady();
   buildSkins();
   renderSkins();
+  document.querySelectorAll('.toServers').forEach(button => button.addEventListener('click', backToServers));
+  $('refreshServers').addEventListener('click', refreshServers);
+
+  // Z kodem QR prosto do gry; bez kodu (np. telefon w innej sieci) - lista gier.
   if (!lobbyCode) {
-    showMessage('Brak kodu gry', 'Zeskanuj kod QR z ekranu komputera, na którym działa gra.');
+    showServers();
   } else {
+    gameLabel = 'Kod gry: ' + lobbyCode;
     run();
   }
 })();

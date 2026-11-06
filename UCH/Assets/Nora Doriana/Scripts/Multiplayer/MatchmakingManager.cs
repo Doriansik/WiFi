@@ -21,6 +21,27 @@ public interface IMatchmakingService
 }
 #endregion
 
+#region Lobby Kinds
+// W projekcie UGS sa dwa rodzaje publicznych lobby: gry Relay (aplikacja) i pady z przegladarki.
+// Rodzaj siedzi w indeksowanym polu S1, zeby kazda wyszukiwarka widziala tylko swoje.
+public static class LobbyKind
+{
+    public const string Key = "kind";
+    public const string Game = "game";
+    public const string Pad = "pad";  // ta sama wartosc w docs/pad/index.html (lista gier)
+
+    public static DataObject Create(string kind)
+    {
+        return new DataObject(DataObject.VisibilityOptions.Public, kind, DataObject.IndexOptions.S1);
+    }
+
+    public static QueryFilter Filter(string kind)
+    {
+        return new QueryFilter(QueryFilter.FieldOptions.S1, kind, QueryFilter.OpOptions.EQ);
+    }
+}
+#endregion
+
 #region Matchmaking System
 public class MatchmakingManager : MonoBehaviour, IMatchmakingService
 {
@@ -48,7 +69,8 @@ public class MatchmakingManager : MonoBehaviour, IMatchmakingService
             IsPrivate = false,
             Data = new Dictionary<string, DataObject>
             {
-                { JoinCodeKey, new DataObject(DataObject.VisibilityOptions.Public, joinCode) }
+                { JoinCodeKey, new DataObject(DataObject.VisibilityOptions.Public, joinCode) },
+                { LobbyKind.Key, LobbyKind.Create(LobbyKind.Game) }
             }
         };
 
@@ -60,7 +82,7 @@ public class MatchmakingManager : MonoBehaviour, IMatchmakingService
         NetworkManager.Singleton.StartHost();
     }
 
-    // Host bez Relay i Lobby (brak internetu) - wystarczy dla padow z telefonow w tej samej sieci.
+    // Host bez Relay i Lobby (brak internetu) - gra na jednym komputerze; pady potrzebuja internetu do signalingu.
     public void StartLocalHost()
     {
         if (!NetworkManager.Singleton.IsListening)
@@ -117,7 +139,9 @@ public class MatchmakingManager : MonoBehaviour, IMatchmakingService
         {
             Filters = new List<QueryFilter>
             {
-                new QueryFilter(QueryFilter.FieldOptions.AvailableSlots, AvailableSlotsFilter, QueryFilter.OpOptions.GT)
+                new QueryFilter(QueryFilter.FieldOptions.AvailableSlots, AvailableSlotsFilter, QueryFilter.OpOptions.GT),
+                // Lobby padow nie ma kodu Relay - dolaczenie do niego z aplikacji skonczyloby sie bledem.
+                LobbyKind.Filter(LobbyKind.Game)
             }
         };
 

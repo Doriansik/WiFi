@@ -73,7 +73,7 @@ public class MainMenuUI : MonoBehaviour
         }
         catch (Exception exception)
         {
-            // Bez internetu nie ma Relay/Lobby - pady z telefonow i tak dzialaja w sieci lokalnej.
+            // Bez internetu nie ma Relay/Lobby - gra startuje lokalnie, ale pady (signaling przez Lobby) tez nie rusza.
             Debug.LogWarning($"Relay/Lobby niedostepne, start bez internetu: {exception.Message}");
             _matchmakingManager.StartLocalHost();
         }

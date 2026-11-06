@@ -8,11 +8,12 @@ using Unity.Services.Lobbies.Models;
 using UnityEngine;
 
 #region Pad Signaling
-// "Zapoznanie" telefonu z hostem przez Unity Lobby: prywatne lobby z kodem z QR, telefon wpisuje oferte WebRTC
+// "Zapoznanie" telefonu z hostem przez Unity Lobby: lobby z kodem z QR (albo wybrane z listy), telefon wpisuje oferte WebRTC
 // do swoich danych gracza, host odpowiada w danych lobby. Po polaczeniu Lobby nie bierze udzialu w grze.
 public sealed class PadSignaling
 {
-    private const string LobbyName = "Pady";
+    private const string LobbyName = "Pady";  // gdy system nie poda nazwy komputera
+    private const int MaxLobbyNameLength = 32;
     private const float HeartbeatIntervalSeconds = 15f;
     // Lobby wpuszcza ~1 heartbeat na sekunde na gracza, a host podtrzymuje tez lobby z MatchmakingManager -
     // przesuniecie i szybka ponowna proba, zeby oba nie trafialy w te sama sekunde.
@@ -46,7 +47,13 @@ public sealed class PadSignaling
 
     public async Task StartAsync()
     {
-        _lobby = await LobbyService.Instance.CreateLobbyAsync(LobbyName, _maxPads + 1, new CreateLobbyOptions { IsPrivate = true });
+        // Publiczne - telefon bez kodu QR (np. inne Wi-Fi) wybiera gre z listy po nazwie komputera.
+        var options = new CreateLobbyOptions
+        {
+            IsPrivate = false,
+            Data = new Dictionary<string, DataObject> { { LobbyKind.Key, LobbyKind.Create(LobbyKind.Pad) } }
+        };
+        _lobby = await LobbyService.Instance.CreateLobbyAsync(GetLobbyName(), _maxPads + 1, options);
         _nextHeartbeatTime = Time.unscaledTime + FirstHeartbeatDelaySeconds;
 
         var callbacks = new LobbyEventCallbacks();
@@ -131,6 +138,13 @@ public sealed class PadSignaling
         {
             Debug.LogWarning($"Pady: heartbeat lobby nie powiodl sie ({exception.Message}).");
         }
+    }
+
+    private static string GetLobbyName()
+    {
+        string deviceName = SystemInfo.deviceName?.Trim();
+        string name = string.IsNullOrEmpty(deviceName) || deviceName == SystemInfo.unsupportedIdentifier ? LobbyName : deviceName;
+        return name.Length > MaxLobbyNameLength ? name.Substring(0, MaxLobbyNameLength) : name;
     }
 
     public static string ShortId(string playerId)
