@@ -196,6 +196,8 @@ public sealed class PadRtcHost : IDisposable
         private RTCDataChannel _controlChannel;
         private RTCDataChannel _inputChannel;
         private bool _hasLoggedFirstMessage;
+        private readonly Queue<string> _pendingControl = new Queue<string>();
+        private const int MaxPendingMessages = 64;
 
         public RTCPeerConnection PeerConnection { get; }
         public bool IsClosed { get; private set; }
@@ -211,9 +213,37 @@ public sealed class PadRtcHost : IDisposable
         }
 
         // Tekst zawsze jako bajty UTF-8 - Send(string) w Unity WebRTC wysyla ANSI.
+        // Na wolniejszym laczu (dane komorkowe) host potrafi chciec wyslac powitanie, zanim jego strona kanalu sterowania
+        // sie otworzy - wtedy wiadomosc czeka w kolejce zamiast przepasc (telefon stalby na "Odbieranie stanu gry").
         public void Send(string message)
         {
-            SendOn(_controlChannel, message);
+            if (IsClosed)
+            {
+                return;
+            }
+
+            if (IsOpen(_controlChannel))
+            {
+                FlushPending();
+                _controlChannel.Send(Encoding.UTF8.GetBytes(message));
+            }
+            else if (_pendingControl.Count < MaxPendingMessages)
+            {
+                _pendingControl.Enqueue(message);
+            }
+        }
+
+        private void FlushPending()
+        {
+            if (_pendingControl.Count > 0)
+            {
+                Debug.Log($"Pady: {_logName} kanal sterowania otwarty - wysylam {_pendingControl.Count} zaleglych wiadomosci");
+            }
+
+            while (_pendingControl.Count > 0 && !IsClosed && IsOpen(_controlChannel))
+            {
+                _controlChannel.Send(Encoding.UTF8.GetBytes(_pendingControl.Dequeue()));
+            }
         }
 
         // Pong idzie kanalem bez retransmisji, zeby pomiar opoznienia pokazywal prawdziwe Wi-Fi.
@@ -245,6 +275,7 @@ public sealed class PadRtcHost : IDisposable
             {
                 _controlChannel = channel;
                 channel.OnClose = () => _hub.HandleLinkClosed(this);
+                channel.OnOpen = FlushPending;
             }
             else if (channel.Label == InputChannelLabel)
             {
@@ -264,6 +295,7 @@ public sealed class PadRtcHost : IDisposable
                     return;
                 }
 
+                FlushPending();  // skoro cos doszlo, kanal juz dziala - wysylamy, co czekalo
                 string message = Encoding.UTF8.GetString(bytes);
 
                 // Diagnostyka: pierwsza wiadomosc kanalem sterowania to powinno byc powitanie "h|...".
