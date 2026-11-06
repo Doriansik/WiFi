@@ -183,6 +183,20 @@ public class PadServer : MonoBehaviour
 
         Debug.Log($"Pady: telefon {padEvent.Session.Name} ({PadSignaling.ShortId(padEvent.Session.Id)}) - {padEvent.Type}");
 
+        if (padEvent.Type == PadEventType.Left)
+        {
+            if (padPlayer != null)
+            {
+                RemovePadPlayer(padPlayer);
+            }
+            else
+            {
+                _hub.RemoveSession(padEvent.Session);
+            }
+
+            return;
+        }
+
         if (padEvent.Type == PadEventType.Disconnected)
         {
             if (padPlayer != null)

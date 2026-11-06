@@ -153,7 +153,8 @@ public sealed class PadSession
 public enum PadEventType
 {
     Connected,
-    Disconnected
+    Disconnected,
+    Left  // gracz sam wyszedl z gry na telefonie - nie czekamy na jego powrot
 }
 
 public struct PadEvent
@@ -166,7 +167,8 @@ public struct PadEvent
 #region Pad Hub
 // Protokol padow niezalezny od transportu. Wiadomosci "typ|dane":
 //   telefon -> host: h|id|nazwa (hello), i|sekwencja|przyciski|licznikSkokow, r|0/1 (gotowy), n|nazwa, k|postac, p|czas (ping),
-//                    budowanie: c|k|miejsce (wez obiekt z puli), c|m|dx|dy (kursor), c|r (obrot), c|p (postaw)
+//                    budowanie: c|k|miejsce (wez obiekt z puli), c|m|dx|dy (kursor), c|r (obrot), c|p (postaw),
+//                    x (wyjscie do listy gier - postac znika od razu)
 //   host -> telefon: w|numer|#kolor (powitanie), s|lobby/game/build (faza), k|mojaPostac|zajete,przez,innych,
 //                    q|obiekt:-/m/x,... (pula: wolny / moj / czyjs), b|mojObiekt|0/1 (postawiony),
 //                    f (brak miejsc), o|czas (pong)
@@ -295,6 +297,9 @@ public sealed class PadHub
                     session.EnqueueCommand(command);
                 }
 
+                break;
+            case "x":
+                _events.Enqueue(new PadEvent { Type = PadEventType.Left, Session = session });
                 break;
         }
     }

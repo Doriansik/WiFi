@@ -40,6 +40,13 @@
   .route:empty { display: none; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b7280; }
   .dot.good { background: #22c55e; } .dot.ok { background: #eab308; } .dot.bad { background: #ef4444; }
+  /* Wyjscie z gry do listy gier - tylko w lobby, w trakcie gry przypadkowe dotkniecie wyrzucaloby gracza */
+  .leave {
+    display: flex; align-items: center; gap: 4px; padding: 6px 10px 6px 8px; border-radius: 10px; flex: none;
+    border: 2px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 700;
+  }
+  .leave svg { width: 18px; height: 18px; fill: currentColor; }
+  .leave[hidden] { display: none; }
 
   main { flex: 1; position: relative; min-height: 0; }
   section { position: absolute; inset: 0; display: none; padding: 16px; }
@@ -202,6 +209,7 @@
   <div class="badge" id="badge">?</div>
   <div class="who"><b id="nameLabel">Gracz</b><small id="phaseLabel">Łączenie…</small></div>
   <div class="ping"><span class="route" id="route"></span><span class="dot" id="dot"></span><span id="ping">— ms</span></div>
+  <button class="leave" id="leave" type="button" hidden aria-label="Wyjdź do listy gier"><svg viewBox="0 0 24 24"><path d="M14.5 4 6.5 12l8 8 1.8-1.8L10.1 12l6.2-6.2z"/></svg>Wyjdź</button>
 </header>
 
 <main>
@@ -319,6 +327,7 @@
   const INPUT_RESEND_MS = 100;        // kanal wejscia jest bez retransmisji - stan powtarzamy, zgubiony pakiet nie zostawi wcisnietego przycisku
   const PING_INTERVAL_MS = 500;       // czeste pingi trzymaja Wi-Fi telefonu w trybie aktywnym (mniejsze skoki opoznienia)
   const DEAD_AFTER_MS = 3000;
+  const LEAVE_FLUSH_MS = 300;         // tyle zyje polaczenie po pozegnaniu "x", zeby doszlo do komputera
   const VIBRATE_MS = 8;
   // Te same identyfikatory co SkinDefinition.Id w prefabie gracza; obrazki w skins/<id>.png
   const SKINS = [
@@ -385,6 +394,7 @@
     screenName = id;
     document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === id));
     $('phaseLabel').textContent = { lobby: 'Lobby', game: 'Gra', build: 'Budowanie', connecting: 'Łączenie…', servers: 'Wybór gry', home: 'Menu' }[id] || '';
+    $('leave').hidden = id !== 'lobby';
     if (id !== 'build') stopRepeat();
     if (id !== 'game') setMask(0);
   }
@@ -536,7 +546,11 @@
   function backToServers() {
     connectRun++;
     connecting = false;
-    closePeer();
+    // Pozegnanie - komputer usuwa postac od razu, zamiast czekac 20 s na powrot telefonu.
+    if (ctl && ctl.readyState === 'open') ctl.send('x');
+    closePeer(LEAVE_FLUSH_MS);
+    ready = false;  // w nowej grze gracz zaczyna jako niegotowy
+    renderReady();
     if (lobbyId && auth) lobbyFetch('DELETE', `/${lobbyId}/players/${auth.userId}`).catch(() => { /* lobby moglo zniknac */ });
     lobbyId = null;
     targetLobbyId = null;
@@ -627,13 +641,16 @@
     });
   }
 
-  function closePeer() {
+  // delayMs - chwila na wyslanie ostatniej wiadomosci (pozegnania), zanim polaczenie zniknie.
+  function closePeer(delayMs = 0) {
     const peer = pc;
+    [ctl, inp].forEach(channel => { if (channel) channel.onmessage = null; });
     pc = ctl = inp = null;
     $('route').textContent = '';
     if (peer) {
       peer.onconnectionstatechange = null;
-      try { peer.close(); } catch (e) { /* juz zamkniete */ }
+      const close = () => { try { peer.close(); } catch (e) { /* juz zamkniete */ } };
+      if (delayMs > 0) setTimeout(close, delayMs); else close();
     }
   }
 
@@ -1311,6 +1328,7 @@
   buildSkins();
   renderSkins();
   document.querySelectorAll('.toServers').forEach(button => button.addEventListener('click', backToServers));
+  $('leave').addEventListener('click', backToServers);
   $('refreshServers').addEventListener('click', refreshServers);
 
   $('play').addEventListener('click', showServers);
