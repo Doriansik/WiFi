@@ -166,6 +166,12 @@ public class PlacementManager : NetworkBehaviour
             return false;
         }
 
+        // Bomba moze wybuchnac wszedzie na siatce - i tak nie zostaje na planszy.
+        if (_items[itemIndex].IsBomb)
+        {
+            return true;
+        }
+
         // Klej (miod) nie zajmuje miejsca: moze lezec na obiektach i skrzyniach mapy, a inne obiekty moga stanac na nim.
         // Startu i mety nie zaslania nic - tam postacie sie pojawiaja i koncza bieg.
         bool isGlue = _items[itemIndex].Glue;
@@ -207,8 +213,48 @@ public class PlacementManager : NetworkBehaviour
             return false;
         }
 
+        PlaceableItem item = _items[itemIndex];
+
+        if (item.IsBomb)
+        {
+            Explode(item, cell, rotation);
+            return true;
+        }
+
         _placedObjects.Add(new PlacedObjectState { ItemIndex = itemIndex, CellX = cell.x, CellY = cell.y, Rotation = rotation });
         return true;
+    }
+
+    // Wybuch bomby (tylko serwer): usuwa z listy wszystko w zasiegu, a kazdy u siebie widzi wybuch.
+    private void Explode(PlaceableItem bomb, Vector2Int cell, int rotation)
+    {
+        Vector2 center = BuildGrid.GetCenter(cell, bomb.GetFootprint(rotation));
+
+        for (int i = _placedObjects.Count - 1; i >= 0; i--)
+        {
+            PlacedObjectState placed = _placedObjects[i];
+
+            if (!IsValidItem(placed.ItemIndex))
+            {
+                continue;
+            }
+
+            var cells = new RectInt(placed.Cell, _items[placed.ItemIndex].GetFootprint(placed.Rotation));
+
+            if (PlaceableItem.IsInBlast(cells, center, bomb.BlastRadius))
+            {
+                _placedObjects.RemoveAt(i);
+            }
+        }
+
+        PlayExplosionRpc(center, bomb.BlastRadius, System.Array.IndexOf(_items, bomb));
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void PlayExplosionRpc(Vector2 center, float radius, int itemIndex)
+    {
+        Sprite sprite = IsValidItem(itemIndex) ? _items[itemIndex].Sprite : null;
+        BlastEffect.Play(center, radius, sprite);
     }
 
     public PoolSlot GetPoolSlot(int slotIndex)
@@ -376,7 +422,7 @@ public class PlacementManager : NetworkBehaviour
         SyncPlacedViews();
     }
 
-    // Lista tylko rosnie w trakcie gry - dobudowujemy brakujace, a przy innej zmianie budujemy od nowa.
+    // Zwykle lista tylko rosnie - dobudowujemy brakujace. Po wybuchu bomby (usuniecie) budujemy wszystko od nowa.
     private void SyncPlacedViews()
     {
         if (_placedViews.Count > _placedObjects.Count)

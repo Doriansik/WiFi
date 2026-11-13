@@ -47,12 +47,32 @@ public class ScoreHud : MonoBehaviour
 
             Rect labelRect = new Rect(startX + BasePadding, rowY, BaseBoxWidth - (BasePadding * 2), BaseRowHeight);
 
-            string playerLabel = playerScore.ClientId == NetworkManager.Singleton.LocalClientId
-                ? $"Ty (Gracz {playerScore.ClientId}): {playerScore.Score}"
-                : $"Gracz {playerScore.ClientId}: {playerScore.Score}";
+            string playerLabel = $"{GetPlayerName(playerScore.PlayerObjectId, i)}: {playerScore.Score}";
 
             GUI.Label(labelRect, playerLabel);
         }
+    }
+
+    // Nazwa z lobby (wpisana na telefonie / nazwa urzadzenia), "(Ty)" tylko dla wlasnej postaci na tym urzadzeniu.
+    private static string GetPlayerName(ulong playerObjectId, int index)
+    {
+        NetworkManager networkManager = NetworkManager.Singleton;
+
+        if (!networkManager.SpawnManager.SpawnedObjects.TryGetValue(playerObjectId, out NetworkObject playerObject)
+            || !playerObject.TryGetComponent(out LobbyPlayer lobbyPlayer))
+        {
+            return $"Gracz {index + 1}";
+        }
+
+        string name = lobbyPlayer.GetDeviceName();
+
+        if (string.IsNullOrEmpty(name))
+        {
+            name = $"Gracz {index + 1}";
+        }
+
+        bool isLocal = playerObject.OwnerClientId == networkManager.LocalClientId && !lobbyPlayer.IsPadPlayer;
+        return isLocal ? $"{name} (Ty)" : name;
     }
 }
 #endregion

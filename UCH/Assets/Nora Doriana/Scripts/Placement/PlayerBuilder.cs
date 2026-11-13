@@ -75,8 +75,8 @@ public class PlayerBuilder : NetworkBehaviour
     {
         _itemIndex.OnValueChanged -= HandleItemOrRotationChanged;
         _rotation.OnValueChanged -= HandleItemOrRotationChanged;
-        _hasFinished.OnValueChanged += HandleHasFinishedChanged;
-        _isOut.OnValueChanged += HandleIsOutChanged;
+        _hasFinished.OnValueChanged -= HandleHasFinishedChanged;
+        _isOut.OnValueChanged -= HandleIsOutChanged;
         _spawnedBuilders.Remove(this);
         DestroyGhost();
         SubscribeToGameManager(null);
@@ -163,9 +163,14 @@ public class PlayerBuilder : NetworkBehaviour
 
     public void MarkFinished()
     {
-        if (IsServer)
+        if (IsServer && !_hasFinished.Value)
         {
             _hasFinished.Value = true;
+
+            if (ScoreManager.Instance != null)
+            {
+                ScoreManager.Instance.AwardFinish(this);
+            }
         }
     }
 

@@ -1095,10 +1095,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0
+    x: 0.4129599
     y: 0
-    width: 1
-    height: 1
+    width: 0.3124047
+    height: 0.34261242
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 60
@@ -2476,6 +2476,7 @@ MonoBehaviour:
     ShootProjectile: {fileID: 0}
     ShootPopsBack: 0
     HazardAreas: []
+    BlastRadius: 0
   - Id: honey
     DisplayName: Miod
     Sprite: {fileID: -8558778130534045984, guid: dcf33322eeb461a4884d835b7f1a183b, type: 3}
@@ -2497,6 +2498,7 @@ MonoBehaviour:
     ShootProjectile: {fileID: 0}
     ShootPopsBack: 0
     HazardAreas: []
+    BlastRadius: 0
   - Id: ice
     DisplayName: Lod
     Sprite: {fileID: -2952623901175308655, guid: 81848093ea2049d4c9d5e30ef897f6c0, type: 3}
@@ -2518,6 +2520,7 @@ MonoBehaviour:
     ShootProjectile: {fileID: 0}
     ShootPopsBack: 0
     HazardAreas: []
+    BlastRadius: 0
   - Id: fork
     DisplayName: Widelec
     Sprite: {fileID: 4677803593169044662, guid: 2bb1459ebc46d244ca4e0b911163eb30, type: 3}
@@ -2541,6 +2544,7 @@ MonoBehaviour:
     HazardAreas:
     - Min: {x: -2, y: 6}
       Size: {x: 5, y: 19}
+    BlastRadius: 0
   - Id: knife
     DisplayName: Noz
     Sprite: {fileID: 9057313361611612832, guid: cffdad6566bdb0c408c184613a768d13, type: 3}
@@ -2564,6 +2568,7 @@ MonoBehaviour:
     HazardAreas:
     - Min: {x: -1, y: 11}
       Size: {x: 72, y: 17}
+    BlastRadius: 0
   - Id: cheese_stairs
     DisplayName: Ser
     Sprite: {fileID: 7844852404344805913, guid: a118aaf181788204da3c8e2ee1da64a6, type: 3}
@@ -2585,6 +2590,7 @@ MonoBehaviour:
     ShootProjectile: {fileID: 0}
     ShootPopsBack: 0
     HazardAreas: []
+    BlastRadius: 0
   - Id: toaster
     DisplayName: Toster
     Sprite: {fileID: 5328037098106691717, guid: 630331c9efc918e469bfb7ef039f2a4a, type: 3}
@@ -2606,6 +2612,7 @@ MonoBehaviour:
     ShootProjectile: {fileID: 834625980239335296, guid: ce1358ff4b6834046891f2281a04664d, type: 3}
     ShootPopsBack: 1
     HazardAreas: []
+    BlastRadius: 0
   - Id: catapult
     DisplayName: Katapulta
     Sprite: {fileID: -9043119415605910152, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
@@ -2634,6 +2641,29 @@ MonoBehaviour:
     ShootProjectile: {fileID: 0}
     ShootPopsBack: 0
     HazardAreas: []
+    BlastRadius: 0
+  - Id: bomb
+    DisplayName: Bomba
+    Sprite: {fileID: 21300000, guid: 8762bbffeaa64a0459bb46080141c3cd, type: 3}
+    Size: {x: 1, y: 1}
+    Animation: {fileID: 0}
+    BounceHeight: 0
+    BounceFrames: []
+    BounceFramesPerSecond: 12
+    Slippery: 0
+    Glue: 0
+    ShootInterval: 0
+    ShootFrames: []
+    ShootFramesPerSecond: 12
+    ShootReleaseFrame: 0
+    ShootDirection: {x: 1, y: 0}
+    ShootOrigin: {x: 0, y: 0}
+    ShootSpeed: 6
+    ShootGravity: 0
+    ShootProjectile: {fileID: 0}
+    ShootPopsBack: 0
+    HazardAreas: []
+    BlastRadius: 2.5
 --- !u!114 &2200000005
 MonoBehaviour:
   m_ObjectHideFlags: 0

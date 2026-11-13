@@ -98,6 +98,22 @@ public class PlaceableItem
     // obiektu - jak na arkuszu PNG, od lewego dolnego rogu, przed obrotem. Moga wystawac poza grafike.
     public PixelArea[] HazardAreas;
 
+    // Bomba: wybucha od razu po postawieniu i usuwa wszystkie postawione obiekty, ktore zachodza na kolo o tym
+    // promieniu (w kratkach, od srodka bomby). Sama nie zostaje na planszy. Mapy, startu i mety nie rusza. 0 = nie bomba.
+    public float BlastRadius;
+
+    public bool IsBomb => BlastRadius > 0f;
+
+    private const int BlastPreviewSortingOrder = -1;
+
+    // Czy postawiony obiekt (jego kratki) zachodzi na kolo wybuchu.
+    public static bool IsInBlast(RectInt cells, Vector2 center, float radius)
+    {
+        float closestX = Mathf.Clamp(center.x, cells.xMin, cells.xMax);
+        float closestY = Mathf.Clamp(center.y, cells.yMin, cells.yMax);
+        return (new Vector2(closestX, closestY) - center).sqrMagnitude < radius * radius;
+    }
+
     public Vector2Int GetFootprint(int rotation)
     {
         return rotation % 2 == 0 ? Size : new Vector2Int(Size.y, Size.x);
@@ -131,6 +147,12 @@ public class PlaceableItem
         if (ShootPopsBack && ShootProjectile != null)
         {
             CreateProjectilePreview(art);
+        }
+
+        // Przy budowaniu widac zasieg wybuchu.
+        if (IsBomb && !withCollider)
+        {
+            BlastEffect.CreateCircle(root.transform, BlastRadius, BlastPreviewSortingOrder);
         }
 
         if (withCollider && !Glue)
