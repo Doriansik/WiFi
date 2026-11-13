@@ -21,7 +21,7 @@ public class SkinPickerUI : MonoBehaviour
 
     private static readonly Color RowColor = new Color(1f, 1f, 1f, 0.08f);
     private static readonly Color SelectedRowColor = new Color(1f, 1f, 1f, 0.32f);
-    private static readonly Color TakenColor = new Color(1f, 1f, 1f, 0.35f);
+    private static readonly Color TakenColor = new Color(0f, 0f, 0f, 0.35f);
 
     private sealed class SkinRow
     {
@@ -73,8 +73,8 @@ public class SkinPickerUI : MonoBehaviour
             bool canSelect = isSelected || _localSkin.CanSelect(i);
 
             row.Background.color = isSelected ? SelectedRowColor : RowColor;
-            row.Icon.color = canSelect ? Color.white : TakenColor;
-            row.Label.color = canSelect ? Color.white : TakenColor;
+            row.Icon.color = canSelect ? Color.white : new Color(1f, 1f, 1f, 0.35f);
+            row.Label.color = canSelect ? Color.black : TakenColor;
             row.Label.text = canSelect ? skins[i].DisplayName : $"{skins[i].DisplayName}\n<size=70%>{TakenText}</size>";
             row.Button.interactable = canSelect && !isSelected;
         }
@@ -166,6 +166,7 @@ public class SkinPickerUI : MonoBehaviour
         text.fontSize = fontSize;
         text.alignment = alignment;
         text.raycastTarget = false;
+        text.color = Color.black;
         return text;
     }
 
