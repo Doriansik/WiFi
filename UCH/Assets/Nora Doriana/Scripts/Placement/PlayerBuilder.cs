@@ -45,6 +45,8 @@ public class PlayerBuilder : NetworkBehaviour
 
     public static IReadOnlyList<PlayerBuilder> SpawnedBuilders => _spawnedBuilders;
 
+    public event System.Action<PlayerBuilder> OnReachedFinish;
+
     public int ItemIndex => _itemIndex.Value;
     public bool HasPickedItem => _itemIndex.Value >= 0;
     public int PickHighlight => _pickHighlight;  // podswietlony kafelek puli przy wyborze klawiatura
@@ -63,8 +65,8 @@ public class PlayerBuilder : NetworkBehaviour
         _localCursor = _cursorCell.Value;
         _itemIndex.OnValueChanged += HandleItemOrRotationChanged;
         _rotation.OnValueChanged += HandleItemOrRotationChanged;
-        _hasFinished.OnValueChanged += HandleFinishedChanged;
-        _isOut.OnValueChanged += HandleFinishedChanged;
+        _hasFinished.OnValueChanged += HandleHasFinishedChanged;
+        _isOut.OnValueChanged += HandleIsOutChanged;
         _spawnedBuilders.Add(this);
         UpdateVisibility();
     }
@@ -73,8 +75,8 @@ public class PlayerBuilder : NetworkBehaviour
     {
         _itemIndex.OnValueChanged -= HandleItemOrRotationChanged;
         _rotation.OnValueChanged -= HandleItemOrRotationChanged;
-        _hasFinished.OnValueChanged -= HandleFinishedChanged;
-        _isOut.OnValueChanged -= HandleFinishedChanged;
+        _hasFinished.OnValueChanged += HandleHasFinishedChanged;
+        _isOut.OnValueChanged += HandleIsOutChanged;
         _spawnedBuilders.Remove(this);
         DestroyGhost();
         SubscribeToGameManager(null);
@@ -607,7 +609,17 @@ public class PlayerBuilder : NetworkBehaviour
 
     // Postac, ktora weszla do ust, znika do konca rundy (razem ze znacznikiem pada).
     // Postac w mecie albo zabita (kulka, widelec, noz) znika do nastepnej rundy; spadajaca i tak jest juz poza ekranem.
-    private void HandleFinishedChanged(bool previousValue, bool newValue)
+    private void HandleHasFinishedChanged(bool previousValue, bool newValue)
+    {
+        UpdateVisibility();
+        // Daje punkt TYLKO gdy wartoœæ zmienia siê z false na true (w³aœnie wszed³ na metê)
+        if (newValue && !previousValue)
+        {
+            OnReachedFinish?.Invoke(this);
+        }
+    }
+
+    private void HandleIsOutChanged(bool previousValue, bool newValue)
     {
         UpdateVisibility();
     }
