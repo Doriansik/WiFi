@@ -105,6 +105,32 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: iOS
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
@@ -113,16 +139,22 @@ TextureImporter:
       rect:
         serializedVersion: 2
         x: 0
-        y: 5
+        y: 0
         width: 32
-        height: 16
+        height: 32
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
-      physicsShape: []
-      tessellationDetail: -1
+      physicsShape:
+      - - {x: -14, y: -16}
+        - {x: 14, y: -16}
+        - {x: 15, y: -10}
+        - {x: 8, y: -3}
+        - {x: -5, y: -2}
+        - {x: -14, y: -8}
+      tessellationDetail: 0
       bones: []
       spriteID: e030f9dbe41350ed0800000000000000
       internalID: -2448496608147471602
@@ -134,17 +166,23 @@ TextureImporter:
       name: bread_object_1
       rect:
         serializedVersion: 2
-        x: 31
-        y: 5
-        width: 34
-        height: 13
+        x: 32
+        y: 0
+        width: 32
+        height: 32
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
-      physicsShape: []
-      tessellationDetail: -1
+      physicsShape:
+      - - {x: -15, y: -16}
+        - {x: 15, y: -16}
+        - {x: 16, y: -11}
+        - {x: 7, y: -5}
+        - {x: -7, y: -5}
+        - {x: -16, y: -11}
+      tessellationDetail: 0
       bones: []
       spriteID: ac064076dc5b994d0800000000000000
       internalID: -3127268572430835510
@@ -156,17 +194,23 @@ TextureImporter:
       name: bread_object_2
       rect:
         serializedVersion: 2
-        x: 66
-        y: 5
-        width: 28
-        height: 18
+        x: 64
+        y: 0
+        width: 32
+        height: 32
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
-      physicsShape: []
-      tessellationDetail: -1
+      physicsShape:
+      - - {x: -12, y: -16}
+        - {x: 12, y: -16}
+        - {x: 12, y: -6}
+        - {x: 5, y: 0}
+        - {x: -5, y: 0}
+        - {x: -12, y: -6}
+      tessellationDetail: 0
       bones: []
       spriteID: ab26c209c3cee6180800000000000000
       internalID: -9120092450517654854
@@ -178,17 +222,26 @@ TextureImporter:
       name: bread_object_3
       rect:
         serializedVersion: 2
-        x: 99
-        y: 5
-        width: 26
-        height: 20
+        x: 96
+        y: 0
+        width: 32
+        height: 32
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
-      physicsShape: []
-      tessellationDetail: -1
+      physicsShape:
+      - - {x: -9, y: -16}
+        - {x: 9, y: -16}
+        - {x: 11, y: -14}
+        - {x: 12, y: -9}
+        - {x: 11, y: -3}
+        - {x: 5, y: 2}
+        - {x: -7, y: 1}
+        - {x: -12, y: -5}
+        - {x: -11, y: -14}
+      tessellationDetail: 0
       bones: []
       spriteID: 22798332b9e8b1740800000000000000
       internalID: 5123845798026057506
@@ -200,7 +253,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5e2b0f5fa613b4a4094253296ae2010a
     internalID: 0
     vertices: []
     indices: 

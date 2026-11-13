@@ -14,7 +14,7 @@ public class PlacementHud : MonoBehaviour
     private const string KeyboardHint = "Strzalki/mysz - kursor   R, PPM - obrot   Spacja, klik - postaw";
     private const string TouchHint = "Dotknij - kursor, dotknij jeszcze raz - postaw   skok - obrot";
     private const string PlacedHint = "Postawione! Czekamy na reszte...";
-    private const string FallenHint = "Poza plansza - poczekaj na nastepna runde";
+    private const string FallenHint = "Odpadles - poczekaj na nastepna runde";
     private const string FinishedHint = "Meta! Czekamy na reszte...";
     private const int MaxNameLength = 10;
 

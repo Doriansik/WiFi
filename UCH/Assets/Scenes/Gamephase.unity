@@ -152,9 +152,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.PixelPerfectCamera
   m_ComponentVersion: 1
   m_AssetsPPU: 32
-  m_RefResolutionX: 640
-  m_RefResolutionY: 360
-  m_CropFrame: 0
+  m_RefResolutionX: 1280
+  m_RefResolutionY: 720
+  m_CropFrame: 4
   m_GridSnapping: 2
   m_FilterMode: 0
   m_UpscaleRT: 0
@@ -205,7 +205,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 5
+  orthographic size: 11.25
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -2365,26 +2365,40 @@ MonoBehaviour:
     Sprite: {fileID: -2448496608147471602, guid: 291705096189caa449e61f009fb8ba3e, type: 3}
     Size: {x: 1, y: 1}
     Animation: {fileID: 0}
+    BounceHeight: 4
+    BounceFrames:
+    - {fileID: -3127268572430835510, guid: 291705096189caa449e61f009fb8ba3e, type: 3}
+    - {fileID: 5123845798026057506, guid: 291705096189caa449e61f009fb8ba3e, type: 3}
+    - {fileID: -9120092450517654854, guid: 291705096189caa449e61f009fb8ba3e, type: 3}
+    BounceFramesPerSecond: 12
   - Id: honey
     DisplayName: Miod
     Sprite: {fileID: -8558778130534045984, guid: dcf33322eeb461a4884d835b7f1a183b, type: 3}
     Size: {x: 2, y: 1}
     Animation: {fileID: 0}
+    Glue: 1
   - Id: ice
     DisplayName: Lod
     Sprite: {fileID: -2952623901175308655, guid: 81848093ea2049d4c9d5e30ef897f6c0, type: 3}
     Size: {x: 1, y: 1}
     Animation: {fileID: 0}
+    Slippery: 1
   - Id: fork
     DisplayName: Widelec
     Sprite: {fileID: 4677803593169044662, guid: 2bb1459ebc46d244ca4e0b911163eb30, type: 3}
     Size: {x: 3, y: 1}
     Animation: {fileID: 0}
+    HazardAreas:
+    - Min: {x: -2, y: 6}
+      Size: {x: 5, y: 19}
   - Id: knife
     DisplayName: Noz
     Sprite: {fileID: 9057313361611612832, guid: cffdad6566bdb0c408c184613a768d13, type: 3}
     Size: {x: 4, y: 1}
     Animation: {fileID: 0}
+    HazardAreas:
+    - Min: {x: -1, y: 11}
+      Size: {x: 72, y: 17}
   - Id: cheese_stairs
     DisplayName: Ser
     Sprite: {fileID: 7844852404344805913, guid: a118aaf181788204da3c8e2ee1da64a6, type: 3}
@@ -2395,11 +2409,37 @@ MonoBehaviour:
     Sprite: {fileID: 5328037098106691717, guid: 630331c9efc918e469bfb7ef039f2a4a, type: 3}
     Size: {x: 2, y: 2}
     Animation: {fileID: 0}
+    ShootInterval: 3
+    ShootFrames: []
+    ShootFramesPerSecond: 12
+    ShootReleaseFrame: 0
+    ShootDirection: {x: 0, y: 1}
+    ShootOrigin: {x: 0, y: 0}
+    ShootSpeed: 12.4
+    ShootGravity: 22
+    ShootProjectile: {fileID: 834625980239335296, guid: ce1358ff4b6834046891f2281a04664d, type: 3}
+    ShootPopsBack: 1
   - Id: catapult
     DisplayName: Katapulta
     Sprite: {fileID: -9043119415605910152, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
     Size: {x: 1, y: 1}
-    Animation: {fileID: 9100000, guid: 7ba11ab0553643edbf7f7578ed461570, type: 2}
+    Animation: {fileID: 0}
+    ShootInterval: 3
+    ShootFrames:
+    - {fileID: -9043119415605910152, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    - {fileID: -3945860479169450775, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    - {fileID: 4273158080389541631, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    - {fileID: -5487782410550268329, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    - {fileID: 8236175408662595318, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    - {fileID: 8023606608557278079, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    - {fileID: -5188217742342082118, guid: 3df2ef8afe00c8542b3437890be40856, type: 3}
+    ShootFramesPerSecond: 12
+    ShootReleaseFrame: 4
+    ShootDirection: {x: 1, y: 1.6}
+    ShootOrigin: {x: 8, y: 4}
+    ShootSpeed: 12
+    ShootGravity: 22
+    ShootProjectile: {fileID: 0}
 --- !u!1 &2300000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -2428,7 +2468,7 @@ Transform:
   m_GameObject: {fileID: 2300000000}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -8, y: -1.5, z: 0}
+  m_LocalPosition: {x: -18, y: -7.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2580,7 +2620,7 @@ Transform:
   m_GameObject: {fileID: 2300000010}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 8, y: -1.5, z: 0}
+  m_LocalPosition: {x: 18, y: -7.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2743,7 +2783,7 @@ Transform:
   m_GameObject: {fileID: 2400000010}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -8, y: -4, z: 0}
+  m_LocalPosition: {x: -18, y: -10, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2895,7 +2935,7 @@ Transform:
   m_GameObject: {fileID: 2400000020}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 8, y: -4, z: 0}
+  m_LocalPosition: {x: 18, y: -10, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

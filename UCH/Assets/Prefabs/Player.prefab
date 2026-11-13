@@ -119,7 +119,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 3
   m_MaskInteraction: 0
   m_Sprite: {fileID: -3047271936483254964, guid: e06eb2c21de1b4146afcddd7b27818c0, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -232,7 +232,7 @@ Rigidbody2D:
   m_Mass: 1
   m_LinearDamping: 0
   m_AngularDamping: 0.05
-  m_GravityScale: 1
+  m_GravityScale: 3
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -257,8 +257,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   ShowTopMostFoldoutHeaderGroup: 1
-  MovementSpeed: 2
-  JumpForce: 3
+  MovementSpeed: 4
   _rigidbody: {fileID: -1091708533487074426}
 --- !u!61 &3559464713643303732
 BoxCollider2D:
@@ -304,8 +303,8 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 0.40625, y: 0.9375}
-  m_EdgeRadius: 0
+  m_Size: {x: 0.34375, y: 0.875}
+  m_EdgeRadius: 0.03125
 --- !u!114 &6620913377712345678
 MonoBehaviour:
   m_ObjectHideFlags: 0

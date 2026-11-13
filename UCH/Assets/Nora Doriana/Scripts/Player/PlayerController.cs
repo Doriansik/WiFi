@@ -5,15 +5,18 @@ using UnityEngine;
 public class PlayerController : NetworkBehaviour
 {
     [SerializeField] private float MovementSpeed = 5f;
-    [SerializeField] private float JumpForce = 12f;
+    [SerializeField] private float JumpHeight = 1.5f;  // w kratkach (1 kratka = 32 px), liczone od stop do szczytu skoku
 
     [Header("Wall jump")]
-    // Wzgledem zwyklego skoku i biegu - zmiana JumpForce/MovementSpeed w prefabie zmienia tez odbicie od sciany.
+    // Wzgledem zwyklego skoku i biegu - zmiana JumpHeight/MovementSpeed w prefabie zmienia tez odbicie od sciany.
     [SerializeField] private float WallJumpHeightFactor = 1f;      // 1 = tak wysoko jak zwykly skok
     [SerializeField] private float WallJumpPushFactor = 1.2f;      // odbicie w bok = predkosc biegu x tyle
     [SerializeField] private float WallJumpInputLockSeconds = 0.12f; // tyle po odbiciu sterowanie nie zawraca postaci na sciane
     [SerializeField] private float WallSlideFallFactor = 0.4f;     // zjazd po scianie: maks. predkosc spadania = predkosc skoku x tyle
     [SerializeField] private float WallJumpGraceSeconds = 0.1f;    // skok wcisniety chwile po oderwaniu od sciany tez sie liczy
+
+    [Header("Lod")]
+    [SerializeField] private float IceAcceleration = 8f;  // kratki/s^2 - jak szybko postac na lodzie rozpedza sie i hamuje (mniej = bardziej slisko)
 
     [SerializeField] private Rigidbody2D _rigidbody;
 
@@ -22,6 +25,7 @@ public class PlayerController : NetworkBehaviour
     private const float WallNormalMinX = 0.7f;
     private const float MaxJumpStartVelocityY = 0.1f;  // nie skaczemy drugi raz, zanim fizyka odlepi postac od ziemi
     private const int MaxContacts = 16;
+    private const float BounceCooldownSeconds = 0.2f;  // jedno odbicie na jedno ladowanie, nawet gdy postac chwile zostaje w strefie
 
     // Gracze przenikaja sie nawzajem (jak w imprezowych platformowkach) - wszyscy startuja z jednej lodowki.
     private static readonly List<Collider2D> _playerColliders = new List<Collider2D>();
@@ -31,12 +35,16 @@ public class PlayerController : NetworkBehaviour
 
     private readonly List<ContactPoint2D> _contacts = new List<ContactPoint2D>(MaxContacts);
     private Collider2D _collider;
+    private float _gravityScale = 1f;  // z prefabu - stojac na podlozu wylaczamy grawitacje, potem ja przywracamy
 
     // Jak w imprezowych platformowkach: od sciany mozna sie odbijac wiele razy, takze od tej samej -
     // wspinaczka wymaga wracania do sciany po kazdym odbiciu (blokada sterowania odrzuca postac na chwile).
     private int _lastWallSide;
     private float _lastWallTime = float.MinValue;
     private float _inputLockUntil;
+    private float _nextBounceTime;
+    // Zjechawszy albo wyskoczywszy z lodu postac leci dalej rozpedem, dopoki gracz nie wcisnie kierunku albo nie wyladuje.
+    private bool _hasIceMomentum;
 
     // Postac telefonu-pada: sterowanie tylko z jego telefonu, nigdy z klawiatury hosta.
     private PadInput _padInput;
@@ -48,6 +56,8 @@ public class PlayerController : NetworkBehaviour
         {
             _rigidbody = GetComponent<Rigidbody2D>();
         }
+
+        _gravityScale = _rigidbody.gravityScale;
 
         if (_noFriction == null)
         {
@@ -133,13 +143,32 @@ public class PlayerController : NetworkBehaviour
     private void HandleMovement()
     {
         float horizontalInput = _padInput != null ? _padInput.GetHorizontalInput() : GetLocalHorizontalInput();
-        ReadContacts(out bool isGrounded, out int wallSide);
+        ReadContacts(out bool isGrounded, out int wallSide, out bool isOnIce);
         Vector2 velocity = _rigidbody.linearVelocity;
+
+        if (isGrounded)
+        {
+            _hasIceMomentum = isOnIce;
+        }
+        else if (wallSide != 0)
+        {
+            _hasIceMomentum = false;
+        }
 
         // Chwile po odbiciu od sciany postac leci tam, gdzie ja odbilo - inaczej trzymany kierunek wcisnalby ja z powrotem.
         if (Time.time >= _inputLockUntil)
         {
-            velocity.x = horizontalInput * MovementSpeed;
+            float targetSpeedX = horizontalInput * MovementSpeed;
+
+            if (isGrounded && isOnIce)
+            {
+                // Lod: predkosc dochodzi do zadanej powoli - postac rusza z poslizgiem i jeszcze kawalek jedzie po puszczeniu.
+                velocity.x = Mathf.MoveTowards(velocity.x, targetSpeedX, IceAcceleration * Time.fixedDeltaTime);
+            }
+            else if (!(_hasIceMomentum && horizontalInput == 0f))
+            {
+                velocity.x = targetSpeedX;
+            }
         }
 
         // Zjazd po scianie: wolniejsze spadanie, gdy gracz trzyma kierunek w strone sciany - latwiej trafic z odbiciem.
@@ -150,6 +179,17 @@ public class PlayerController : NetworkBehaviour
         if (!isGrounded && isPressingIntoWall && velocity.y < -wallSlideMaxFallSpeed)
         {
             velocity.y = -wallSlideMaxFallSpeed;
+        }
+
+        // Postac jest bez tarcia (zeby nie wisiala na scianach), wiec na lagodnym skosie powoli by sie zsuwala.
+        // Stojac na podlozu bez wcisnietego kierunku zatrzymujemy ja w miejscu - grawitacja wraca przy ruchu i skoku.
+        bool isStandingStill = isGrounded && horizontalInput == 0f && Time.time >= _inputLockUntil && velocity.y <= MaxJumpStartVelocityY
+            && (!isOnIce || Mathf.Abs(velocity.x) < 0.01f);
+        _rigidbody.gravityScale = isStandingStill ? 0f : _gravityScale;
+
+        if (isStandingStill)
+        {
+            velocity = Vector2.zero;
         }
 
         _rigidbody.linearVelocity = velocity;
@@ -181,13 +221,14 @@ public class PlayerController : NetworkBehaviour
             return;
         }
 
-        ReadContacts(out bool isGrounded, out int wallSide);
+        ReadContacts(out bool isGrounded, out int wallSide, out _);
 
         if (isGrounded)
         {
             if (_rigidbody.linearVelocity.y < MaxJumpStartVelocityY)
             {
-                _rigidbody.AddForce(Vector2.up * JumpForce, ForceMode2D.Impulse);
+                _rigidbody.gravityScale = _gravityScale;  // stojac bez ruchu postac miala wylaczona grawitacje
+                _rigidbody.linearVelocity = new Vector2(_rigidbody.linearVelocity.x, GetJumpSpeed());
             }
 
             return;
@@ -200,23 +241,78 @@ public class PlayerController : NetworkBehaviour
 
         if (wallSide != 0)
         {
+            _rigidbody.gravityScale = _gravityScale;
             _rigidbody.linearVelocity = new Vector2(wallSide * MovementSpeed * WallJumpPushFactor, GetJumpSpeed() * WallJumpHeightFactor);
             _inputLockUntil = Time.time + WallJumpInputLockSeconds;
             _lastWallTime = float.MinValue;
         }
     }
 
-    // Predkosc w gore, jaka daje zwykly skok (impuls JumpForce przy masie postaci).
+    // Postac wpadla w strefe odbijajacego obiektu (np. chleba). Odbija tylko wlasciciel - u niego liczy sie fizyka postaci.
+    public void TryBounce(ItemBouncer bouncer)
+    {
+        if (!IsOwner || !CanMove() || Time.time < _nextBounceTime)
+        {
+            return;
+        }
+
+        Vector2 direction = bouncer.Direction;
+        Vector2 velocity = _rigidbody.linearVelocity;
+
+        // Tylko gdy postac na obiekt spada albo na nim stoi - nie gdy juz od niego odlatuje.
+        if (Vector2.Dot(velocity, direction) > MaxJumpStartVelocityY)
+        {
+            return;
+        }
+
+        _nextBounceTime = Time.time + BounceCooldownSeconds;
+        _rigidbody.gravityScale = _gravityScale;
+        _rigidbody.linearVelocity = velocity - Vector2.Dot(velocity, direction) * direction + direction * SpeedForHeight(bouncer.Height);
+
+        // Obiekt obrocony bokiem odrzuca w poziomie - przez chwile sterowanie nie zawraca postaci (jak przy odbiciu od sciany).
+        if (Mathf.Abs(direction.x) > 0.5f)
+        {
+            _inputLockUntil = Time.time + WallJumpInputLockSeconds;
+        }
+
+        bouncer.PlayAnimation();
+
+        if (bouncer.PlacedIndex >= 0)
+        {
+            PlayBounceEffectRpc(bouncer.PlacedIndex);
+        }
+    }
+
+    [Rpc(SendTo.NotMe)]
+    private void PlayBounceEffectRpc(int placedIndex)
+    {
+        if (PlacementManager.Instance != null)
+        {
+            PlacementManager.Instance.PlayBounceEffect(placedIndex);
+        }
+    }
+
     private float GetJumpSpeed()
     {
-        return JumpForce / _rigidbody.mass;
+        return SpeedForHeight(JumpHeight);
+    }
+
+    // Predkosc startowa, z ktora postac wzniesie sie dokladnie o tyle kratek. Fizyka liczy w krokach (semi-implicit Euler),
+    // co zjada ok. pol kroku wzlotu - doliczamy to, zeby skok na 1.5 kratki naprawde siegal 1.5 kratki.
+    private float SpeedForHeight(float heightCells)
+    {
+        float gravity = Mathf.Abs(Physics2D.gravity.y) * _gravityScale;
+        float halfStep = gravity * Time.fixedDeltaTime * 0.5f;
+        return halfStep + Mathf.Sqrt(halfStep * halfStep + 2f * gravity * Mathf.Max(0f, heightCells));
     }
 
     // Czego postac dotyka po ostatnim kroku fizyki. wallSide: +1 = sciana po lewej (odbicie w prawo), -1 = po prawej, 0 = brak.
-    private void ReadContacts(out bool isGrounded, out int wallSide)
+    // isOnIce: postac stoi na sliskiej powierzchni (SlipperySurface).
+    private void ReadContacts(out bool isGrounded, out int wallSide, out bool isOnIce)
     {
         isGrounded = false;
         wallSide = 0;
+        isOnIce = false;
         int count = _rigidbody.GetContacts(_contacts);
 
         for (int i = 0; i < count; i++)
@@ -231,6 +327,11 @@ public class PlayerController : NetworkBehaviour
             if (contact.normal.y >= GroundNormalMinY)
             {
                 isGrounded = true;
+
+                if (contact.collider.TryGetComponent(out SlipperySurface _) || contact.otherCollider.TryGetComponent(out SlipperySurface _))
+                {
+                    isOnIce = true;
+                }
             }
             else if (Mathf.Abs(contact.normal.x) >= WallNormalMinX)
             {

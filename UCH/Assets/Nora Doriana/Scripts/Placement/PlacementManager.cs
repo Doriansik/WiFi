@@ -11,7 +11,7 @@ public class PlacementManager : NetworkBehaviour
     private const float PlacementDurationSeconds = 40f;  // wybor z puli + stawianie
     private const int ExtraPoolItems = 1;  // pula ma o jeden obiekt wiecej niz graczy - ostatni tez ma wybor
     private const float PlatformingDurationSeconds = 60f;
-    private const float FallLimitY = -8f;  // ponizej dolnej krawedzi ekranu = gracz odpada z rundy
+    private const float FallLimitY = -14f;  // ponizej dolnej krawedzi ekranu (-11,25) = gracz odpada z rundy
     private const int GridSortingOrder = -10;
 
     private static readonly Color GridColor = new Color(1f, 1f, 1f, 0.12f);
@@ -24,6 +24,9 @@ public class PlacementManager : NetworkBehaviour
     private NetworkVariable<double> _phaseEndTime = new NetworkVariable<double>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private readonly List<GameObject> _placedViews = new List<GameObject>();
+    // Wszystkie postawione obiekty pod jednym CompositeCollider2D (obrysy) - sasiednie obiekty tworza jedna powierzchnie,
+    // wiec postac nie zahacza o styk dwoch obiektow stojacych obok siebie.
+    private Transform _placedRoot;
     private readonly List<RectInt> _blockedAreas = new List<RectInt>();
     private readonly List<RectInt> _markedAreas = new List<RectInt>();  // start i meta - pokazane na czerwono przy budowaniu
     private readonly List<Object> _generatedAssets = new List<Object>();
@@ -79,6 +82,11 @@ public class PlacementManager : NetworkBehaviour
         if (_gridOverlay != null)
         {
             Destroy(_gridOverlay);
+        }
+
+        if (_placedRoot != null)
+        {
+            Destroy(_placedRoot.gameObject);
         }
 
         if (Instance == this)
@@ -158,7 +166,11 @@ public class PlacementManager : NetworkBehaviour
             return false;
         }
 
-        foreach (RectInt blocked in _blockedAreas)
+        // Klej (miod) nie zajmuje miejsca: moze lezec na obiektach i skrzyniach mapy, a inne obiekty moga stanac na nim.
+        // Startu i mety nie zaslania nic - tam postacie sie pojawiaja i koncza bieg.
+        bool isGlue = _items[itemIndex].Glue;
+
+        foreach (RectInt blocked in isGlue ? _markedAreas : _blockedAreas)
         {
             if (area.Overlaps(blocked))
             {
@@ -166,8 +178,18 @@ public class PlacementManager : NetworkBehaviour
             }
         }
 
+        if (isGlue)
+        {
+            return true;
+        }
+
         foreach (PlacedObjectState placed in _placedObjects)
         {
+            if (_items[placed.ItemIndex].Glue)
+            {
+                continue;
+            }
+
             if (area.Overlaps(new RectInt(placed.Cell, _items[placed.ItemIndex].GetFootprint(placed.Rotation))))
             {
                 return false;
@@ -373,7 +395,139 @@ public class PlacementManager : NetworkBehaviour
             GameObject view = IsValidItem(placed.ItemIndex)
                 ? _items[placed.ItemIndex].CreateView(placed.Cell, placed.Rotation, true)
                 : new GameObject("UnknownItem");
+            AttachToPlacedRoot(view);
+
+            foreach (ItemBouncer bouncer in view.GetComponentsInChildren<ItemBouncer>())
+            {
+                bouncer.PlacedIndex = i;
+            }
+
             _placedViews.Add(view);
+        }
+
+        UpdateGlueLinks();
+    }
+
+    private const float GlueOverlapInsetPixels = 3f;  // przezroczysty brzeg grafiki tostu sie nie liczy
+
+    // Klejenie liczymy z ukladu z fazy budowania (tak, jak wszystko stoi przy stawianiu), nigdy z kolejnosci stawiania -
+    // dlatego od nowa po kazdym postawieniu. Miod, ktory zachodzi na tost (stojacy przy budowaniu w miejscu tostera),
+    // przykleja sie do tostu, a wszystko, co zachodzi na taki miod (takze dalej, przez kolejne miody), leci razem z tostem.
+    // Tostery zostaja na miejscu - to one wyrzucaja tost. Kolejnosc i pozycje obiektow sa u kazdego takie same.
+    private void UpdateGlueLinks()
+    {
+        int count = _placedViews.Count;
+        var rects = new Rect[count];
+        var poppers = new CatapultShooter[count];
+        var carriers = new CatapultShooter[count];
+        float inset = GlueOverlapInsetPixels / 32f;
+
+        for (int i = 0; i < count; i++)
+        {
+            PlacedObjectState placed = _placedObjects[i];
+            rects[i] = IsValidItem(placed.ItemIndex)
+                ? new Rect(placed.Cell, _items[placed.ItemIndex].GetFootprint(placed.Rotation))
+                : Rect.zero;
+
+            CatapultShooter shooter = _placedViews[i].GetComponentInChildren<CatapultShooter>();
+            poppers[i] = shooter != null && shooter.PopsBack ? shooter : null;
+        }
+
+        var queue = new Queue<int>();
+
+        for (int p = 0; p < count; p++)
+        {
+            if (poppers[p] == null || !poppers[p].TryGetPreviewRect(out Rect toastRect))
+            {
+                continue;
+            }
+
+            toastRect = Rect.MinMaxRect(toastRect.xMin + inset, toastRect.yMin + inset, toastRect.xMax - inset, toastRect.yMax - inset);
+
+            for (int i = 0; i < count; i++)
+            {
+                if (carriers[i] == null && IsGlue(i) && rects[i].Overlaps(toastRect))
+                {
+                    carriers[i] = poppers[p];
+                    queue.Enqueue(i);
+                }
+            }
+
+            // Miod skleja to, na co zachodzi; zwykle obiekty stykajace sie ze soba bez miodu sie nie kleja.
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+
+                for (int other = 0; other < count; other++)
+                {
+                    if (carriers[other] != null || poppers[other] != null || !(IsGlue(current) || IsGlue(other)))
+                    {
+                        continue;
+                    }
+
+                    if (rects[current].Overlaps(rects[other]))
+                    {
+                        carriers[other] = poppers[p];
+                        queue.Enqueue(other);
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            if (carriers[i] != null || _placedViews[i].TryGetComponent(out GluedFollower _))
+            {
+                GluedFollower.Link(_placedViews[i], carriers[i]);
+            }
+        }
+    }
+
+    private bool IsGlue(int placedIndex)
+    {
+        int itemIndex = _placedObjects[placedIndex].ItemIndex;
+        return IsValidItem(itemIndex) && _items[itemIndex].Glue;
+    }
+
+    // Animacja odbicia u pozostalych graczy - postawione obiekty sa u kazdego w tej samej kolejnosci.
+    public void PlayBounceEffect(int placedIndex)
+    {
+        if (placedIndex < 0 || placedIndex >= _placedViews.Count)
+        {
+            return;
+        }
+
+        foreach (ItemBouncer bouncer in _placedViews[placedIndex].GetComponentsInChildren<ItemBouncer>())
+        {
+            bouncer.PlayAnimation();
+        }
+    }
+
+    private void AttachToPlacedRoot(GameObject view)
+    {
+        if (_placedRoot == null)
+        {
+            var root = new GameObject("PlacedObjects");
+            // Najpierw statyczne cialo - CompositeCollider2D sam dodalby dynamiczne, ktore spadloby z grawitacja.
+            Rigidbody2D body = root.AddComponent<Rigidbody2D>();
+            body.bodyType = RigidbodyType2D.Static;
+            CompositeCollider2D composite = root.AddComponent<CompositeCollider2D>();
+            // Obrysy (krawedzie) zamiast wypelnionych wielokatow - bez wewnetrznych szwow, po ktorych postac by sie potykala.
+            composite.geometryType = CompositeCollider2D.GeometryType.Outlines;
+            composite.generationType = CompositeCollider2D.GenerationType.Synchronous;
+            _placedRoot = root.transform;
+        }
+
+        view.transform.SetParent(_placedRoot, true);
+
+        // Do wspolnej powierzchni ida tylko bryly - wyzwalacze (np. strefa odbicia chleba) musza zostac osobne,
+        // tak samo sliskie powierzchnie (lod), zeby postac wiedziala, ze stoi wlasnie na nich.
+        foreach (Collider2D viewCollider in view.GetComponentsInChildren<Collider2D>())
+        {
+            if (!viewCollider.isTrigger && !viewCollider.TryGetComponent(out SlipperySurface _))
+            {
+                viewCollider.compositeOperation = Collider2D.CompositeOperation.Merge;
+            }
         }
     }
 

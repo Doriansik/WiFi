@@ -35,6 +35,9 @@ public class PlayerBuilder : NetworkBehaviour
     private Vector3 _lastMousePosition;
     private int _pickHighlight;
 
+    private const float DeathReportRepeatSeconds = 0.5f;
+    private float _nextDeathReportTime;
+
     private GameObject _ghost;
     private SpriteRenderer[] _ghostRenderers;
     private int _ghostItemIndex = -1;
@@ -61,8 +64,9 @@ public class PlayerBuilder : NetworkBehaviour
         _itemIndex.OnValueChanged += HandleItemOrRotationChanged;
         _rotation.OnValueChanged += HandleItemOrRotationChanged;
         _hasFinished.OnValueChanged += HandleFinishedChanged;
+        _isOut.OnValueChanged += HandleFinishedChanged;
         _spawnedBuilders.Add(this);
-        SetVisible(!HasFinished);
+        UpdateVisibility();
     }
 
     public override void OnNetworkDespawn()
@@ -70,6 +74,7 @@ public class PlayerBuilder : NetworkBehaviour
         _itemIndex.OnValueChanged -= HandleItemOrRotationChanged;
         _rotation.OnValueChanged -= HandleItemOrRotationChanged;
         _hasFinished.OnValueChanged -= HandleFinishedChanged;
+        _isOut.OnValueChanged -= HandleFinishedChanged;
         _spawnedBuilders.Remove(this);
         DestroyGhost();
         SubscribeToGameManager(null);
@@ -187,6 +192,30 @@ public class PlayerBuilder : NetworkBehaviour
         if (!_hasPlaced.Value && PlacementManager.Instance.TryPlace(_itemIndex.Value, _cursorCell.Value, _rotation.Value))
         {
             _hasPlaced.Value = true;
+        }
+    }
+
+    // Smierc (kulka z katapulty, widelec od przodu, ostrze noza). Pulapki widzi kazdy u siebie, ale o trafieniu decyduje
+    // wlasciciel postaci - u niego jej pozycja jest prawdziwa. Strefa dotykana przez kilka klatek nie zasypuje serwera.
+    public void ReportDeath()
+    {
+        if (!IsOwner || IsOut || HasFinished || Time.time < _nextDeathReportTime)
+        {
+            return;
+        }
+
+        _nextDeathReportTime = Time.time + DeathReportRepeatSeconds;
+        ReportDeathRpc();
+    }
+
+    [Rpc(SendTo.Server)]
+    private void ReportDeathRpc(RpcParams rpcParams = default)
+    {
+        bool isPlatforming = GameManager.Instance != null && GameManager.Instance.GetCurrentState() == GameState.Platforming;
+
+        if (IsFromOwner(rpcParams) && isPlatforming && !_hasFinished.Value)
+        {
+            MarkOut();
         }
     }
 
@@ -577,9 +606,15 @@ public class PlayerBuilder : NetworkBehaviour
     }
 
     // Postac, ktora weszla do ust, znika do konca rundy (razem ze znacznikiem pada).
+    // Postac w mecie albo zabita (kulka, widelec, noz) znika do nastepnej rundy; spadajaca i tak jest juz poza ekranem.
     private void HandleFinishedChanged(bool previousValue, bool newValue)
     {
-        SetVisible(!newValue);
+        UpdateVisibility();
+    }
+
+    private void UpdateVisibility()
+    {
+        SetVisible(!HasFinished && !IsOut);
     }
 
     private void SetVisible(bool isVisible)
