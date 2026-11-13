@@ -2479,7 +2479,7 @@ MonoBehaviour:
     BlastRadius: 0
   - Id: honey
     DisplayName: Miod
-    Sprite: {fileID: -8558778130534045984, guid: dcf33322eeb461a4884d835b7f1a183b, type: 3}
+    Sprite: {fileID: -4989809560451958403, guid: 8cbfc1c05b87b4f48bf80d0c2d132af6, type: 3}
     Size: {x: 2, y: 1}
     Animation: {fileID: 0}
     BounceHeight: 0
